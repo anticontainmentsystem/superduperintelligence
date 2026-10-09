@@ -70,9 +70,9 @@ const uniforms = {
 const LOBE_GLSL = `
       vec3 lobeField(vec3 p) {
         float ax = abs(p.x) / uBox.x, yn = (p.y - uBox.y) / uBox.z, zn = p.z / uBox.w;
-        float s0 = min(min(yn - 0.30, max(yn - 0.42, zn + 0.10)), zn + 0.58);
-        float top = 0.53 - 0.13 * zn - 0.9 * max(0.0, zn - 0.28) * max(0.0, zn - 0.28) * 4.0;
-        float sTr = max(max(0.45 - ax, -0.55 - zn), max(zn - 0.52, yn - top));
+        float s0 = min(min(yn - 0.26, max(yn - 0.40, zn + 0.22)), zn + 0.62);
+        float top = 0.62 - 0.12 * zn - 3.0 * max(0.0, zn - 0.32) * max(0.0, zn - 0.32);
+        float sTr = max(max(0.30 - ax, -0.62 - zn), max(zn - 0.60, yn - top));
         float sFr = (0.25 - 0.32 * (yn - 0.5)) - zn;
         float sT = max(sTr, -s0);
         float sF = max(max(sFr, -sTr), -s0);
@@ -117,10 +117,10 @@ material.onBeforeCompile = (s) => {
 
 // Same lobe math as the shader, so a tap picks exactly the lobe that is drawn.
 function lobeOf(ax, yn, zn) {
-  const s0 = Math.min(yn - 0.30, Math.max(yn - 0.42, zn + 0.10), zn + 0.58);
+  const s0 = Math.min(yn - 0.26, Math.max(yn - 0.40, zn + 0.22), zn + 0.62);
   if (s0 < 0) return 0; // brainstem, cerebellum, occipital: reserved
-  const t = Math.max(0, zn - 0.28), top = 0.53 - 0.13 * zn - 3.6 * t * t;
-  if (Math.max(0.45 - ax, -0.55 - zn, zn - 0.52, yn - top) < 0) return 3; // temporal
+  const t = Math.max(0, zn - 0.32), top = 0.62 - 0.12 * zn - 3.0 * t * t;
+  if (Math.max(0.30 - ax, -0.62 - zn, zn - 0.60, yn - top) < 0) return 3; // temporal
   if ((0.25 - 0.32 * (yn - 0.5)) - zn < 0) return 1; // frontal
   return 2; // parietal
 }
@@ -205,9 +205,8 @@ function hitBrain(x, y) {
   ray.setFromCamera(ndc, camera);
   const hit = ray.intersectObject(brain, false)[0];
   if (!hit) return null;
-  const a = brain.geometry.attributes.region, f = hit.face;
-  const rs = [a.getX(f.a), a.getX(f.b), a.getX(f.c)];
-  return rs[0] === rs[1] || rs[0] === rs[2] ? rs[0] : rs[1];
+  const p = brain.worldToLocal(hit.point.clone()), B = uniforms.uBox.value;
+  return lobeOf(Math.abs(p.x) / B.x, (p.y - B.y) / B.z, p.z / B.w);
 }
 const inBand = (x) => (x < band ? 'left' : x > W - band ? 'right' : null);
 
@@ -467,6 +466,8 @@ let activeShown = false;
 selectMode('oracle', false);
 // Test hook: window.__sdiSelect('judge') lights that lobe as if it were tapped.
 window.__sdiSelect = (m) => { if (MODES[m]) selectMode(m, true); };
+window.__sdiState = () => ({ mode, yaw, ready: !!brain });
+window.__sdiProbe = (x, y) => hitBrain(x, y);
 
 /* ---------- Loop ---------- */
 const clock = new THREE.Clock();
