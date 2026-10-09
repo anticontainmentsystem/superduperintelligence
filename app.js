@@ -18,7 +18,7 @@ const VERSION = {
 // Modes. A fourth mode is one more entry here, one more region, and one more card.
 // Regions: 1 frontal (front), 2 parietal (top), 3 temporal (lower side), 4 occipital (back).
 const MODES = {
-  guide: { name: 'Guide', region: 1, hint: 'Describe your situation, then list the options or let the brain suggest some.', placeholder: 'Your situation' },
+  guide: { name: 'Guide', region: 1, hint: 'Describe your situation, then list the options or let the brain suggest some.', placeholder: 'Describe your situation. The more context, the better the options.' },
   judge: { name: 'Judge', region: 2, hint: 'Submit an idea, a line, or a plan. The brain scores it.', placeholder: 'Your idea' },
   mentor: { name: 'Mentor', region: 3, local: true },
   oracle: { name: 'Oracle', region: 4, hint: 'Ask a yes or no question.', placeholder: 'Will it work?' },
@@ -94,7 +94,8 @@ const LOBE_GLSL = `
         return f.y > 0.0 ? 1.0 : 2.0;
       }
 `;
-const material = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.62, metalness: 0.0 });
+// Double sided, so gaps in the mesh where lobes meet the cerebellum never show the white through.
+const material = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.62, metalness: 0.0, side: THREE.DoubleSide });
 material.onBeforeCompile = (s) => {
   Object.assign(s.uniforms, uniforms);
   s.vertexShader = s.vertexShader
@@ -123,7 +124,7 @@ material.onBeforeCompile = (s) => {
       vec4 f2 = lobeFields(n2);
       vec4 fw = max(fwidth(f2), vec4(1e-6));
       vec4 dl = abs(f2) / (fw * uPx);
-      float cer = sst(0.0, 0.02, f2.x);
+      float cer = sst(0.035, 0.075, f2.x);
       float lat = sst(0.28, 0.36, n2.x);
       float notO = step(0.0, f2.z), notT = 1.0 - (1.0 - step(0.0, f2.w)) * step(0.32, n2.x);
       vec4 ae = uActiveV * uAmt;
@@ -326,7 +327,9 @@ function sweepBands() {
   sheens.forEach((el) => { el.classList.remove('sweep'); void el.offsetWidth; el.classList.add('sweep'); });
 }
 let nameTimer = 0;
+const drafts = { guide: '', judge: '', oracle: '' }; // each mode keeps its own text
 function selectMode(m, fromBrain) {
+  if (m !== mode && drafts[mode] !== undefined) drafts[mode] = $('question').value;
   mode = m;
   const M = MODES[m];
   uniforms.uActiveV.value.set(M.region === 1 ? 1 : 0, M.region === 2 ? 1 : 0, M.region === 3 ? 1 : 0, M.region === 4 ? 1 : 0);
@@ -334,11 +337,15 @@ function selectMode(m, fromBrain) {
   facing = lobeFace[M.region] || null; faceUntil = performance.now() + 3800;
   const el = $('modeName');
   if (fromBrain) {
-    el.textContent = M.name; el.classList.add('show');
-    clearTimeout(nameTimer); nameTimer = setTimeout(() => el.classList.remove('show'), 1500);
+    // Restart the fade every time, even if the name was already showing.
+    clearTimeout(nameTimer);
+    el.classList.remove('show'); el.textContent = M.name; void el.offsetWidth;
+    el.classList.add('show');
+    nameTimer = setTimeout(() => el.classList.remove('show'), 1700);
   }
   // Mentor swaps both panels to the explainer. No AI call.
   const local = !!M.local;
+  $('closeStep').textContent = isMobile() ? 'Swipe a panel back toward its edge to close it.' : 'Click the band edge or press Escape to close it.';
   $('askForm').hidden = local; $('modeIntro').hidden = local;
   $('mentorLeft').hidden = !local; $('mentorRight').hidden = !local;
   $('answer').hidden = local; $('historyWrap').hidden = local;
@@ -346,6 +353,7 @@ function selectMode(m, fromBrain) {
   $('inMode').textContent = M.name;
   $('inHint').textContent = M.hint;
   $('question').placeholder = M.placeholder;
+  $('question').value = drafts[m] || '';
   $('guideBox').hidden = m !== 'guide';
   $('status').textContent = '';
   if (m === 'guide' && !$('optionList').children.length) { addOption(''); addOption(''); }
@@ -396,13 +404,12 @@ for (const side of ['left', 'right']) {
   p.addEventListener('touchcancel', endSwipe);
 }
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { const open = ['right', 'left'].find((s) => panels[s].classList.contains('open')); if (open) closePanel(open); }
+  if (e.key === 'Escape') ['right', 'left'].forEach(closePanel);
 });
 
 /* ---------- Input ---------- */
 const q = $('question');
-const grow = (el) => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
-q.addEventListener('input', () => grow(q));
+// The box has a fixed height and scrolls inside, so typing never reflows the panel.
 q.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !isMobile()) { e.preventDefault(); $('askForm').requestSubmit(); }
 });
@@ -428,8 +435,8 @@ async function relay(path, body) {
 }
 function setThinking(on) {
   thinking = on;
-  if (on) { facing = lobeFace[MODES[mode].region] || null; faceUntil = Infinity; }
-  else faceUntil = performance.now() + 2500;
+  if (on) { if (!down) { facing = lobeFace[MODES[mode].region] || null; faceUntil = Infinity; } }
+  else if (facing) faceUntil = performance.now() + 1500;
 }
 
 $('suggest').addEventListener('click', async () => {
@@ -477,7 +484,7 @@ const CARDS = {
   oracle: (d) => `<p class="eyebrow">Oracle</p><p class="q">${esc(d.question)}</p>
     <p class="big">${d.verdict === 'YES' ? 'Yes' : 'No'}</p><p class="meta">${d.confidence}% confident</p>${bar(d.confidence)}`,
   judge: (d) => `<p class="eyebrow">Judge</p><p class="q">${esc(d.question)}</p>
-    <p class="big">${d.score}<small>/ 100</small></p><p class="meta">Overall score</p>${bar(d.score)}
+    <p class="big">${d.score}<small>/ 100</small></p><p class="meta">Overall</p>${bar(d.score)}
     <div class="subs">${['clarity', 'originality', 'risk'].map((k) => `<div><div class="sub-top"><span>${k[0].toUpperCase() + k.slice(1)}</span><b>${d.subscores[k]}</b></div>${bar(d.subscores[k])}</div>`).join('')}</div>`,
   guide: (d) => `<p class="eyebrow">Guide</p><p class="q">${esc(d.question)}</p>
     <p class="big word">${esc(d.ranked[0].option)}</p><p class="meta">${Math.round(d.ranked[0].probability * 100)}% likely the best choice</p>
@@ -520,11 +527,14 @@ function frame() {
     if (facing) {
       const d = angleTo(yaw, facing.yaw);
       yaw += d * Math.min(1, dt * 3.2); yawVel = 0;
-      pitchDrag += (facing.pitch - BASE_PITCH - pitchDrag) * Math.min(1, dt * 3.2);
+      const dp = facing.pitch - BASE_PITCH - pitchDrag;
+      pitchDrag += dp * Math.min(1, dt * 3.2);
+      // The turn to face plays once. When it arrives (and nothing is thinking), it ends.
+      if (!thinking && Math.abs(d) < 0.01 && Math.abs(dp) < 0.01) facing = null;
     } else {
       yawVel += (BASE_SPEED - yawVel) * Math.min(1, dt * 1.6);
       yaw += yawVel * dt;
-      pitchDrag += (0 - pitchDrag) * Math.min(1, dt * 1.8);
+      pitchDrag += (0 - pitchDrag) * Math.min(1, dt * 0.5);
     }
   }
   lean.x += (leanTarget.x - lean.x) * Math.min(1, dt * 3);
@@ -547,4 +557,4 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-mobileQuery.addEventListener('change', () => { resize(); fitBrain(true); });
+mobileQuery.addEventListener('change', () => { resize(); fitBrain(true); selectMode(mode, false); });

@@ -55,7 +55,7 @@ body { font-family: var(--font); color: var(--white); -webkit-font-smoothing: an
 
 /* Panels: the flag opening up. Same red, no border, no shadow. */
 .panel {
-  position: fixed; top: 0; bottom: 0; width: var(--panel-w); background: var(--red);
+  position: fixed; top: 0; bottom: 0; width: var(--panel-w); min-width: var(--panel-w); max-width: var(--panel-w); contain: layout; background: var(--red);
   transition: transform var(--slide) var(--ease), visibility 0s linear var(--slide);
   visibility: hidden; z-index: 5; display: flex; flex-direction: column;
 }
@@ -170,3 +170,13 @@ textarea::placeholder, .options input::placeholder { color: rgba(255,255,255,.55
 .abilities dt { font-size: calc(var(--text) + 2px); font-weight: 600; margin-bottom: 4px; }
 .abilities dt span { font-size: 11px; font-weight: 500; letter-spacing: .3em; text-transform: uppercase; opacity: .75; margin-left: 10px; }
 .abilities dd { margin: 0; font-size: var(--text); font-weight: 300; line-height: 1.4; opacity: .95; }
+
+/* Stable layout while typing: fixed box height, inner scroll, no flex growth from content. */
+.field > textarea { min-width: 0; height: calc((var(--text) + 3px) * 1.4 * 3 + 18px); max-height: none; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; scrollbar-width: none; flex: 1 1 0; }
+.field > textarea::-webkit-scrollbar { display: none; }
+.field .send { flex: 0 0 var(--touch); }
+.options li > input { min-width: 0; flex: 1 1 0; text-overflow: ellipsis; }
+.options .x { flex: 0 0 auto; }
+.row { flex-wrap: nowrap; }
+.row .btn { flex: 0 0 auto; white-space: nowrap; }
+.status { min-height: 2.8em; }

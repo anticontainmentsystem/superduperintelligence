@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=overlays-content">
 <title>Super Duper Intelligence</title>
 <meta name="description" content="Super Duper Intelligence. Ask, submit, decide.">
 <meta name="theme-color" content="#D52B1E">
@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
 <link rel="preload" href="assets/brain.glb" as="fetch" crossorigin>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -50,12 +50,12 @@
           <li>Tap a red band to open its panel.</li>
           <li>Drag the brain to turn it.</li>
           <li>Pinch or scroll to zoom.</li>
-          <li>Swipe a panel back or press Escape to close it.</li>
+          <li id="closeStep">Click the band edge or press Escape to close it.</li>
         </ol>
       </div>
       <form id="askForm" autocomplete="off">
         <div class="field">
-          <textarea id="question" rows="1" maxlength="500" aria-label="Your question"></textarea>
+          <textarea id="question" rows="3" maxlength="500" aria-label="Your question"></textarea>
           <button type="submit" class="send" aria-label="Send">
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
           </button>
@@ -96,6 +96,6 @@
     </div>
   </section>
 
-  <script type="module" src="app.js?v=6"></script>
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>
