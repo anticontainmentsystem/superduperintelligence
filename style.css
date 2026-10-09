@@ -5,7 +5,9 @@
   --white: #FFFFFF;
   --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --ease: cubic-bezier(.22, .8, .2, 1);
-  --slide: 620ms;
+  --slide: 700ms;
+  /* Soft glide: no whipping. Open 0.7 s, close 0.6 s, gentle ease in and out. */
+  --open: 700ms; --close: 600ms; --glide: cubic-bezier(.45, .05, .25, 1);
   /* Desktop version settings */
   --band: 25vw;
   --panel-w: max(var(--band), 320px);
@@ -18,7 +20,7 @@
   /* Mobile version settings */
   :root { --band: 25vw; --pad: 26px; --text: 18px; --big: 120px; --touch: 52px; }
 }
-@media (prefers-reduced-motion: reduce) { :root { --slide: 1ms; } }
+@media (prefers-reduced-motion: reduce) { :root { --slide: 1ms; --open: 1ms; --close: 1ms; } }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--white); overscroll-behavior: none; }
@@ -56,12 +58,12 @@ body { font-family: var(--font); color: var(--white); -webkit-font-smoothing: an
 /* Panels: the flag opening up. Same red, no border, no shadow. */
 .panel {
   position: fixed; top: 0; bottom: 0; width: var(--panel-w); min-width: var(--panel-w); max-width: var(--panel-w); contain: layout; background: var(--red);
-  transition: transform var(--slide) var(--ease), visibility 0s linear var(--slide);
+  transition: transform var(--close) var(--glide), visibility 0s linear var(--close);
   visibility: hidden; z-index: 5; display: flex; flex-direction: column;
 }
 .panel-left { left: 0; transform: translateX(-100%); }
 .panel-right { right: 0; transform: translateX(100%); }
-.panel.open { transform: none; visibility: visible; transition: transform var(--slide) var(--ease), visibility 0s; }
+.panel.open { transform: none; visibility: visible; transition: transform var(--open) var(--glide), visibility 0s; }
 .panel-inner {
   flex: 1; overflow-y: auto; overflow-x: hidden; padding: calc(var(--pad) + 8px) var(--pad) var(--pad);
   scrollbar-width: none; opacity: 0; transform: translateY(10px);
@@ -180,3 +182,39 @@ textarea::placeholder, .options input::placeholder { color: rgba(255,255,255,.55
 .row { flex-wrap: nowrap; }
 .row .btn { flex: 0 0 auto; white-space: nowrap; }
 .status { min-height: 2.8em; }
+
+/* Panel sheen: the same white pass as the bands. Once after an answer lands, looping while the brain thinks. */
+.psheen { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.psheen::before {
+  content: ""; position: absolute; left: -10%; right: -10%; top: 0; height: 25%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.3), rgba(255,255,255,0));
+  transform: translateY(-110%) skewY(-6deg); opacity: 0;
+}
+.psheen.sweep::before { animation: psheen 1400ms 1 both; }
+.psheen.loop::before { animation: psheen 2600ms infinite; }
+@keyframes psheen {
+  0% { transform: translateY(-110%) skewY(-6deg); opacity: 1; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  50% { transform: translateY(150%) skewY(4deg); opacity: 1; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  92% { transform: translateY(410%) skewY(-5deg); opacity: 1; }
+  92.1%, 100% { transform: translateY(410%) skewY(-5deg); opacity: 0; }
+}
+.panel-inner { position: relative; z-index: 2; }
+.panel-edge { z-index: 3; }
+
+/* Working: the pressed button breathes until the answer arrives. */
+.working, .btn[disabled].working { opacity: 1; pointer-events: none; animation: work 1100ms ease-in-out infinite; }
+@keyframes work { 0%, 100% { background: rgba(255,255,255,.08); } 50% { background: rgba(255,255,255,.32); } }
+.send.working { color: var(--white); }
+
+/* Mentor links: same as Add option, with a thin underline. */
+.btn.link { margin-top: 22px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; }
+
+/* Thin white cue on the question side while the answer panel is open on mobile. */
+.edge-cue { position: fixed; left: 10px; top: 50%; width: 2px; height: 56px; margin-top: -28px; background: var(--white); border-radius: 1px; opacity: 0; pointer-events: none; z-index: 4; transition: opacity 400ms var(--glide); }
+body.cue-left .edge-cue { opacity: .75; transition-delay: var(--open); }
+
+@media (max-width: 760px), (pointer: coarse) and (orientation: portrait) {
+  /* Mobile mode name: twice the size, lifted off the bottom. */
+  .mode-name { font-size: 24px; bottom: 13vh; }
+}
+@media (prefers-reduced-motion: reduce) { .psheen, .working { animation: none !important; } .psheen { display: none; } }

@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
 <link rel="preload" href="assets/brain.glb" as="fetch" crossorigin>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -31,12 +31,14 @@
   <div class="sheen sheen-left" aria-hidden="true"></div>
   <div class="sheen sheen-right" aria-hidden="true"></div>
 
+  <div class="edge-cue" aria-hidden="true"></div>
   <canvas id="brain" aria-label="A red brain. Tap a part of the brain to change mode. Tap a red band to open it."></canvas>
   <div id="modeName" class="mode-name" aria-live="polite"></div>
 
   <!-- Left band: input. Hidden until the band is clicked. -->
   <section id="panelLeft" class="panel panel-left" data-side="left" aria-hidden="true" inert>
     <button class="panel-edge" data-close aria-label="Close panel"></button>
+    <div class="psheen" aria-hidden="true"></div>
     <div class="panel-inner">
       <div id="modeIntro">
         <p class="eyebrow" id="inMode">Oracle</p>
@@ -52,6 +54,7 @@
           <li>Pinch or scroll to zoom.</li>
           <li id="closeStep">Click the band edge or press Escape to close it.</li>
         </ol>
+        <button type="button" class="btn link" data-go="right">What it can do</button>
       </div>
       <form id="askForm" autocomplete="off">
         <div class="field">
@@ -77,6 +80,7 @@
   <!-- Right band: output. -->
   <section id="panelRight" class="panel panel-right" data-side="right" aria-hidden="true" inert>
     <button class="panel-edge" data-close aria-label="Close panel"></button>
+    <div class="psheen" aria-hidden="true"></div>
     <div class="panel-inner">
       <div id="mentorRight" class="mentor" hidden>
         <p class="eyebrow">Mentor</p>
@@ -87,6 +91,7 @@
           <div><dt>Oracle <span>back</span></dt><dd>Answers yes or no, with how sure it is.</dd></div>
           <div><dt>Mentor <span>side</span></dt><dd>Shows you how it all works.</dd></div>
         </dl>
+        <button type="button" class="btn link" data-go="left">How it works</button>
       </div>
       <div id="answer" class="answer"><p class="hint">Answers land here.</p></div>
       <div class="history-wrap" id="historyWrap">
@@ -96,6 +101,6 @@
     </div>
   </section>
 
-  <script type="module" src="app.js?v=7"></script>
+  <script type="module" src="app.js?v=8"></script>
 </body>
 </html>

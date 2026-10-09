@@ -306,7 +306,12 @@ function endPointer(e) {
   const d = down; down = null;
   if (performance.now() - lastMove.t > 80) yawVel = 0;
   if (d.moved || e.type === 'pointercancel') return;
-  if (isMobile()) { const open = ['left', 'right'].find((s) => panels[s].classList.contains('open')); if (open) { closePanel(open); return; } }
+  if (isMobile()) {
+    const open = ['left', 'right'].find((s) => panels[s].classList.contains('open'));
+    // The thin cue on the question side: tap it to glide back to the question panel.
+    if (open === 'right' && e.clientX < W * 0.14) { openPanel('left'); return; }
+    if (open) { cancelGlide(); closePanel(open); return; }
+  }
   const r = hitBrain(e.clientX, e.clientY);
   if (r) { if (REGION_MODE[r]) selectMode(REGION_MODE[r], true); return; }
   const side = inBand(e.clientX);
@@ -362,12 +367,37 @@ function selectMode(m, fromBrain) {
 /* ---------- Panels ---------- */
 const panels = { left: $('panelLeft'), right: $('panelRight') };
 let openedAt = 0; // ignore the ghost click that follows the opening tap
-function openPanel(side) {
-  if (isMobile()) closePanel(side === 'left' ? 'right' : 'left');
+// Soft glide timing. Must match --open and --close in style.css.
+const OPEN_MS = reduceMotion ? 0 : 700, CLOSE_MS = reduceMotion ? 0 : 600, BEAT_MS = reduceMotion ? 0 : 200;
+let glideTimers = [];
+function cancelGlide() { glideTimers.forEach(clearTimeout); glideTimers = []; }
+const later = (fn, ms) => { glideTimers.push(setTimeout(fn, ms)); };
+// One white pass down an open panel, after it settles.
+function sweepPanel(side) {
+  if (reduceMotion) return;
+  const el = panels[side].querySelector('.psheen');
+  el.classList.remove('sweep', 'loop'); void el.offsetWidth; el.classList.add('sweep');
+}
+// Opens a panel with the soft glide. On mobile only one shows: the other eases back
+// to its edge, a short beat shows the brain, then this one eases in.
+function openPanel(side, sweep) {
+  const other = side === 'left' ? 'right' : 'left';
+  cancelGlide();
+  const wasOpen = panels[side].classList.contains('open');
+  if (isMobile() && panels[other].classList.contains('open')) {
+    closePanel(other);
+    later(() => { showPanel(side); if (sweep) later(() => sweepPanel(side), OPEN_MS); }, CLOSE_MS + BEAT_MS);
+    return;
+  }
+  showPanel(side);
+  if (sweep) later(() => sweepPanel(side), wasOpen ? 0 : OPEN_MS);
+}
+function showPanel(side) {
   const p = panels[side];
   activeShown = true; openedAt = performance.now();
   p.classList.add('open'); p.removeAttribute('inert'); p.setAttribute('aria-hidden', 'false');
   if (side === 'left' && !isMobile()) setTimeout(() => $('question').focus({ preventScroll: true }), 300);
+  syncCue();
 }
 function closePanel(side) {
   const p = panels[side];
@@ -375,10 +405,13 @@ function closePanel(side) {
   if (p.contains(document.activeElement)) document.activeElement.blur();
   p.classList.remove('open'); p.setAttribute('inert', ''); p.setAttribute('aria-hidden', 'true');
   p.style.removeProperty('--drag');
+  syncCue();
 }
+// On mobile, while the answer panel is open, a thin white line on the question side says it is still there.
+function syncCue() { document.body.classList.toggle('cue-left', isMobile() && panels.right.classList.contains('open')); }
 for (const side of ['left', 'right']) {
   const p = panels[side];
-  p.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => { if (performance.now() - openedAt > 450) closePanel(side); }));
+  p.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => { if (performance.now() - openedAt > 450) { cancelGlide(); closePanel(side); } }));
   // Swipe back toward its own edge to close on mobile.
   const dir = side === 'left' ? -1 : 1;
   let start = null;
@@ -404,7 +437,7 @@ for (const side of ['left', 'right']) {
   p.addEventListener('touchcancel', endSwipe);
 }
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') ['right', 'left'].forEach(closePanel);
+  if (e.key === 'Escape') { cancelGlide(); ['right', 'left'].forEach(closePanel); }
 });
 
 /* ---------- Input ---------- */
@@ -424,6 +457,12 @@ function addOption(text, focus) {
   li.append(input, x); list.append(li);
   if (focus) input.focus();
 }
+// Mentor: each explainer panel links to the other with the same glide.
+document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
+  const to = b.dataset.go;
+  if (!isMobile() && panels[to].classList.contains('open')) { sweepPanel(to); return; }
+  openPanel(to, true);
+}));
 $('addOption').addEventListener('click', () => addOption('', true));
 const getOptions = () => [...$('optionList').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
 
@@ -432,6 +471,19 @@ async function relay(path, body) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || 'The brain is busy. Try again in a moment.');
   return data;
+}
+// Working state: the pressed button pulses and a slow sheen loops down the question panel.
+let workingBtn = null;
+function setWorking(btn, on) {
+  const sh = panels.left.querySelector('.psheen');
+  if (on) {
+    workingBtn = btn && btn.offsetParent ? btn : null;
+    if (workingBtn) workingBtn.classList.add('working');
+    if (!reduceMotion) { sh.classList.remove('sweep'); sh.classList.add('loop'); }
+  } else {
+    if (workingBtn) workingBtn.classList.remove('working');
+    workingBtn = null; sh.classList.remove('loop');
+  }
 }
 function setThinking(on) {
   thinking = on;
@@ -443,13 +495,13 @@ $('suggest').addEventListener('click', async () => {
   const question = q.value.trim();
   if (!question) { $('status').textContent = 'Describe your situation first.'; q.focus(); return; }
   const b = $('suggest'); b.disabled = true; $('status').textContent = 'Thinking of options.';
-  setThinking(true);
+  setThinking(true); setWorking(b, true);
   try {
     const { options } = await relay('/suggest', { question });
     $('optionList').innerHTML = ''; options.forEach((o) => addOption(o));
     $('status').textContent = 'Edit them, add your own, then decide.';
   } catch (err) { $('status').textContent = err.message; }
-  b.disabled = false; setThinking(false);
+  b.disabled = false; setThinking(false); setWorking(b, false);
 });
 
 let busy = false;
@@ -464,16 +516,19 @@ $('askForm').addEventListener('submit', async (e) => {
     if (body.options.length < 2) { $('status').textContent = 'Add at least two options, or tap Suggest.'; return; }
   }
   busy = true; $('status').textContent = 'Thinking.'; setThinking(true);
+  const pressed = e.submitter || (mode === 'guide' ? $('decideBtn') : document.querySelector('#askForm .send'));
+  setWorking(pressed, true);
   const started = performance.now();
   try {
     const data = await relay('/decide', body);
     const wait = Math.max(0, 1100 - (performance.now() - started)); // let the wave be seen
     await new Promise((r) => setTimeout(r, wait));
     $('status').textContent = '';
+    setWorking(null, false);
     showAnswer({ ...data, question }, true);
-    if (isMobile()) closePanel('left');
-    openPanel('right');
+    openPanel('right', true); // every mode: the answer panel opens by itself, then one sweep
   } catch (err) { $('status').textContent = err.message; }
+  setWorking(null, false);
   busy = false; setThinking(false);
 });
 
@@ -512,6 +567,7 @@ window.__sdiState = () => ({ mode, yaw, ready: !!brain });
 window.__sdiProbe = (x, y) => hitBrain(x, y);
 window.__sdiPose = (y, p) => { facing = { yaw: y, pitch: p }; faceUntil = Infinity; };
 window.__sdiFaces = () => lobeFace;
+window.__sdiOpen = (side, sweep) => openPanel(side, sweep);
 
 /* ---------- Loop ---------- */
 const clock = new THREE.Clock();
@@ -557,4 +613,4 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-mobileQuery.addEventListener('change', () => { resize(); fitBrain(true); selectMode(mode, false); });
+mobileQuery.addEventListener('change', () => { syncCue(); resize(); fitBrain(true); selectMode(mode, false); });
