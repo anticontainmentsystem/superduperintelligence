@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
 <link rel="preload" href="assets/brain.glb" as="fetch" crossorigin>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -31,15 +31,28 @@
   <div class="sheen sheen-left" aria-hidden="true"></div>
   <div class="sheen sheen-right" aria-hidden="true"></div>
 
-  <canvas id="brain" aria-label="A red brain. Click a lobe to change mode. Click a red band to open it."></canvas>
+  <canvas id="brain" aria-label="A red brain. Tap a part of the brain to change mode. Tap a red band to open it."></canvas>
   <div id="modeName" class="mode-name" aria-live="polite"></div>
 
   <!-- Left band: input. Hidden until the band is clicked. -->
   <section id="panelLeft" class="panel panel-left" data-side="left" aria-hidden="true" inert>
     <button class="panel-edge" data-close aria-label="Close panel"></button>
     <div class="panel-inner">
-      <p class="eyebrow" id="inMode">Oracle</p>
-      <p class="hint" id="inHint">Ask a yes or no question.</p>
+      <div id="modeIntro">
+        <p class="eyebrow" id="inMode">Oracle</p>
+        <p class="hint" id="inHint">Ask a yes or no question.</p>
+      </div>
+      <div id="mentorLeft" class="mentor" hidden>
+        <p class="eyebrow">Mentor</p>
+        <h2 class="mentor-title">How it works</h2>
+        <ol class="steps">
+          <li>Tap a part of the brain to pick a mode.</li>
+          <li>Tap a red band to open its panel.</li>
+          <li>Drag the brain to turn it.</li>
+          <li>Pinch or scroll to zoom.</li>
+          <li>Swipe a panel back or press Escape to close it.</li>
+        </ol>
+      </div>
       <form id="askForm" autocomplete="off">
         <div class="field">
           <textarea id="question" rows="1" maxlength="500" aria-label="Your question"></textarea>
@@ -65,14 +78,24 @@
   <section id="panelRight" class="panel panel-right" data-side="right" aria-hidden="true" inert>
     <button class="panel-edge" data-close aria-label="Close panel"></button>
     <div class="panel-inner">
+      <div id="mentorRight" class="mentor" hidden>
+        <p class="eyebrow">Mentor</p>
+        <h2 class="mentor-title">What it can do</h2>
+        <dl class="abilities">
+          <div><dt>Guide <span>front</span></dt><dd>Picks the best option.</dd></div>
+          <div><dt>Judge <span>top</span></dt><dd>Scores an idea from 0 to 100.</dd></div>
+          <div><dt>Oracle <span>back</span></dt><dd>Answers yes or no, with how sure it is.</dd></div>
+          <div><dt>Mentor <span>side</span></dt><dd>Shows you how it all works.</dd></div>
+        </dl>
+      </div>
       <div id="answer" class="answer"><p class="hint">Answers land here.</p></div>
-      <div class="history-wrap">
+      <div class="history-wrap" id="historyWrap">
         <p class="eyebrow small" id="historyTitle" hidden>History</p>
         <ul id="history" class="history"></ul>
       </div>
     </div>
   </section>
 
-  <script type="module" src="app.js?v=4"></script>
+  <script type="module" src="app.js?v=5"></script>
 </body>
 </html>

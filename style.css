@@ -26,7 +26,7 @@ body { font-family: var(--font); color: var(--white); -webkit-font-smoothing: an
 
 .flag { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; }
 #brain { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: none; outline: none; }
-/* Band sheen: light passing over a waving flag. Two passes, left first. */
+/* Band sheen: light passing over a waving flag. Two passes, both bands in sync. */
 .sheen { position: fixed; top: 0; bottom: 0; width: var(--band); overflow: hidden; pointer-events: none; }
 .sheen-left { left: 0; }
 .sheen-right { right: 0; }
@@ -36,7 +36,6 @@ body { font-family: var(--font); color: var(--white); -webkit-font-smoothing: an
   transform: translateY(-110%) skewY(-6deg); opacity: 0;
 }
 .sheen.sweep::before { animation: sheen 1150ms 2 both; }
-.sheen-right.sweep::before { animation-delay: 150ms; }
 @keyframes sheen {
   0% { transform: translateY(-110%) skewY(-6deg); opacity: 1; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
   39% { transform: translateY(150%) skewY(4deg); opacity: 1; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
@@ -140,6 +139,8 @@ textarea::placeholder, .options input::placeholder { color: rgba(255,255,255,.55
   :root { --panel-w: 88vw; }
   .panel { padding-top: env(safe-area-inset-top); }
   .panel.open { transform: translateX(var(--drag, 0px)); }
+  /* Open on mobile: the red is 80% opaque so the brain shows through slightly. Text stays solid white. */
+  .panel { background: rgba(213, 43, 30, 0.8); }
   .panel.dragging { transition: none; }
   .panel-edge { width: 44px; touch-action: manipulation; }
   .panel-left .panel-edge { right: -22px; }
@@ -157,3 +158,15 @@ textarea::placeholder, .options input::placeholder { color: rgba(255,255,255,.55
   .btn-wide { font-size: 15px; }
 }
 #brain.over-lobe { cursor: pointer; }
+
+/* Mentor: the explainer, same white on red. */
+[hidden] { display: none !important; }
+.mentor-title { margin: 0 0 26px; font-size: calc(var(--text) + 15px); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.steps li { counter-increment: step; display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid rgba(255,255,255,.35); font-size: var(--text); font-weight: 300; line-height: 1.4; }
+.steps li::before { content: counter(step); font-size: 12px; font-weight: 600; min-width: 14px; padding-top: .2em; opacity: .85; }
+.abilities { margin: 0; display: grid; }
+.abilities > div { padding: 14px 0; border-top: 1px solid rgba(255,255,255,.35); }
+.abilities dt { font-size: calc(var(--text) + 2px); font-weight: 600; margin-bottom: 4px; }
+.abilities dt span { font-size: 11px; font-weight: 500; letter-spacing: .3em; text-transform: uppercase; opacity: .75; margin-left: 10px; }
+.abilities dd { margin: 0; font-size: var(--text); font-weight: 300; line-height: 1.4; opacity: .95; }

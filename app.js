@@ -12,16 +12,18 @@ const isMobile = () => mobileQuery.matches;
 // Version settings. Each version sets its own sizes.
 const VERSION = {
   desktop: { restFill: 0.74, restHeight: 0.62 },
-  mobile: { restFill: 0.9, restHeight: 0.5 },
+  mobile: { restFill: 1.08, restHeight: 0.6 },
 };
 
 // Modes. A fourth mode is one more entry here, one more region, and one more card.
+// Regions: 1 frontal (front), 2 parietal (top), 3 temporal (lower side), 4 occipital (back).
 const MODES = {
-  oracle: { name: 'Oracle', region: 1, hint: 'Ask a yes or no question.', placeholder: 'Will it work?' },
+  guide: { name: 'Guide', region: 1, hint: 'Describe your situation, then list the options or let the brain suggest some.', placeholder: 'Your situation' },
   judge: { name: 'Judge', region: 2, hint: 'Submit an idea, a line, or a plan. The brain scores it.', placeholder: 'Your idea' },
-  guide: { name: 'Guide', region: 3, hint: 'Describe your situation, then list the options or let the brain suggest some.', placeholder: 'Your situation' },
+  mentor: { name: 'Mentor', region: 3, local: true },
+  oracle: { name: 'Oracle', region: 4, hint: 'Ask a yes or no question.', placeholder: 'Will it work?' },
 };
-const REGION_MODE = { 1: 'oracle', 2: 'judge', 3: 'guide' };
+const REGION_MODE = { 1: 'guide', 2: 'judge', 3: 'mentor', 4: 'oracle' };
 let mode = 'oracle';
 
 const $ = (id) => document.getElementById(id);
@@ -58,26 +60,38 @@ tilt.add(spin); scene.add(tilt);
 const lift = 0.06; // fraction of brain length to raise the whole brain
 
 const uniforms = {
-  uAmt: { value: new THREE.Vector3() },   // highlight per lobe: frontal, parietal, temporal
-  uHover: { value: new THREE.Vector3() }, // light hover tint per lobe (desktop)
-  uActiveV: { value: new THREE.Vector3(1, 0, 0) }, // which lobe is the active mode
+  uAmt: { value: new THREE.Vector4() },   // highlight per lobe: frontal, parietal, temporal, occipital
+  uHover: { value: new THREE.Vector4() }, // light hover tint per lobe (desktop)
+  uActiveV: { value: new THREE.Vector4(0, 0, 0, 1) }, // which lobe is the active mode
+  uPx: { value: 1 },
   uThink: { value: 0 }, uTime: { value: 0 },
   uLight: { value: new THREE.Color('#FF6A55') }, uDeep: { value: new THREE.Color('#8E160F') },
   uLine: { value: new THREE.Color('#FFE3DE') },
   uBox: { value: new THREE.Vector4(1, 0, 1, 1) },
   uDebug: { value: new URLSearchParams(location.search).has('regions') ? 1 : 0 },
 };
+// Lobes follow the brain's real grooves: the central sulcus (frontal and parietal),
+// the parieto-occipital line (occipital), and the Sylvian fissure (temporal).
+// Every boundary is a smooth curve in model space. The JS twin below is the same math.
 const LOBE_GLSL = `
-      vec3 lobeField(vec3 p) {
-        float ax = abs(p.x) / uBox.x, yn = (p.y - uBox.y) / uBox.z, zn = p.z / uBox.w;
-        float s0 = min(min(yn - 0.26, max(yn - 0.40, zn + 0.22)), zn + 0.62);
-        float top = 0.62 - 0.12 * zn - 3.0 * max(0.0, zn - 0.32) * max(0.0, zn - 0.32);
-        float sTr = max(max(0.30 - ax, -0.62 - zn), max(zn - 0.60, yn - top));
-        float sFr = (0.25 - 0.32 * (yn - 0.5)) - zn;
-        float sT = max(sTr, -s0);
-        float sF = max(max(sFr, -sTr), -s0);
-        float sP = max(max(-sFr, -sTr), -s0);
-        return vec3(sF, sP, sT);
+      float sst(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
+      vec3 lobeN(vec3 p) { return vec3(abs(p.x) / uBox.x, (p.y - uBox.y) / uBox.z, p.z / uBox.w); }
+      // x: cerebrum floor, y: central sulcus, z: parieto-occipital, w: Sylvian. Each is a signed field.
+      vec4 lobeFields(vec3 n) {
+        float ax = n.x, yn = n.y, zn = n.z;
+        float fl = 0.26 + 0.17 * sst(-0.15, -0.55, zn) - 0.10 * sst(0.35, 0.7, ax) * sst(-0.3, 0.0, zn);
+        float zc = 0.02 + 0.42 * (0.95 - yn) + 0.03 * sin(yn * 15.0 + ax * 5.0) + 0.018 * sin(yn * 31.0 - ax * 7.0);
+        float zo = -0.44 - 0.12 * (yn - 0.4) + 0.04 * sin(yn * 3.1) + 0.025 * sin(yn * 13.0 + ax * 6.0) + 0.012 * sin(yn * 29.0 - ax * 4.0);
+        float ys = 0.54 - 0.16 * zn + 0.09 * sst(-0.1, -0.45, zn) + 0.018 * sin(zn * 14.0 + ax * 3.0) + 0.01 * sin(zn * 33.0);
+        float td = yn - (ys - 0.13);
+        float tf = 0.42 - 3.2 * td * td;
+        return vec4(yn - fl, zn - zc, zn - zo, max(yn - ys, zn - tf));
+      }
+      float lobeId(vec3 n, vec4 f) {
+        if (f.x < 0.0) return 0.0;
+        if (f.z < 0.0) return 4.0;
+        if (f.w < 0.0 && n.x > 0.32) return 3.0;
+        return f.y > 0.0 ? 1.0 : 2.0;
       }
 `;
 const material = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.62, metalness: 0.0 });
@@ -87,11 +101,13 @@ material.onBeforeCompile = (s) => {
     .replace('#include <common>', '#include <common>\nattribute float region;\nvarying float vRegion;\nvarying vec3 vPos;')
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRegion = region;\nvPos = position;');
   s.fragmentShader = s.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying float vRegion;\nvarying vec3 vPos;\nuniform float uThink, uTime, uDebug;\nuniform vec3 uAmt, uHover, uActiveV, uLight, uDeep, uLine;\nuniform vec4 uBox;' + LOBE_GLSL)
+    .replace('#include <common>', '#include <common>\nvarying float vRegion;\nvarying vec3 vPos;\nuniform float uThink, uTime, uDebug;\nuniform vec4 uAmt, uHover, uActiveV;\nuniform vec3 uLight, uDeep, uLine;\nuniform vec4 uBox;\nuniform float uPx;' + LOBE_GLSL)
     .replace('#include <color_fragment>', `#include <color_fragment>
       // Lobes are smooth curved fields of model position, negative inside.
-      vec3 lf = lobeField(vPos);
-      vec3 own = 1.0 - step(0.0, lf);
+      vec3 ln0 = lobeN(vPos);
+      vec4 lf = lobeFields(ln0);
+      float rid = lobeId(ln0, lf);
+      vec4 own = vec4(float(rid == 1.0), float(rid == 2.0), float(rid == 3.0), float(rid == 4.0));
       float act = dot(own, uAmt);
       float hov = dot(own, uHover);
       diffuseColor.rgb = mix(diffuseColor.rgb, uLight, clamp(act * 0.6 + hov * 0.22 * (1.0 - act), 0.0, 1.0));
@@ -99,30 +115,42 @@ material.onBeforeCompile = (s) => {
       float w = sin(vPos.z * 0.06 + vPos.y * 0.03 - uTime * 2.2);
       w = smoothstep(0.35, 1.0, w);
       diffuseColor.rgb = mix(diffuseColor.rgb, uDeep, w * inLobe * uThink * 0.75);
-      if (uDebug > 0.5) { diffuseColor.rgb = vRegion < 0.5 ? vec3(0.3) : vRegion < 1.5 ? vec3(0.9,0.2,0.1) : vRegion < 2.5 ? vec3(0.1,0.5,0.9) : vec3(0.1,0.8,0.3); }
+      if (uDebug > 0.5) { diffuseColor.rgb = vRegion < 0.5 ? vec3(0.3) : vRegion < 1.5 ? vec3(0.9,0.2,0.1) : vRegion < 2.5 ? vec3(0.1,0.5,0.9) : vRegion < 3.5 ? vec3(0.1,0.8,0.3) : vec3(0.9,0.8,0.1); }
     `)
     .replace('#include <tonemapping_fragment>', `
-      // Thin boundary lines where a lobe ends: the 0.5 contour of each lobe weight, about 1.5 px wide.
-      vec3 lf2 = lobeField(vPos);
-      vec3 fw = max(fwidth(lf2), vec3(1e-6));
-      vec3 dl = abs(lf2) / fw;
-      vec3 ln = 1.0 - smoothstep(0.35, 1.1, dl);
-      vec3 lnA = 1.0 - smoothstep(0.6, 1.6, dl);
-      float baseLine = max(ln.x, max(ln.y, ln.z)) * 0.7;
-      float activeLine = dot(lnA, uActiveV * uAmt) * 0.95;
-      float lineA = max(baseLine, activeLine);
+      // Thin organic groove lines on each boundary, about 1.5 px, light pink at 0.6, stronger beside the active lobe.
+      vec3 n2 = lobeN(vPos);
+      vec4 f2 = lobeFields(n2);
+      vec4 fw = max(fwidth(f2), vec4(1e-6));
+      vec4 dl = abs(f2) / (fw * uPx);
+      float cer = sst(0.0, 0.02, f2.x);
+      float lat = sst(0.28, 0.36, n2.x);
+      float notO = step(0.0, f2.z), notT = 1.0 - (1.0 - step(0.0, f2.w)) * step(0.32, n2.x);
+      vec4 ae = uActiveV * uAmt;
+      // Which lines touch the active lobe.
+      float aC = max(ae.x, ae.y), aO = max(ae.w, max(ae.y, ae.z)), aT = max(ae.z, max(ae.x, ae.y));
+      float wC = mix(0.75, 1.15, aC), wO = mix(0.75, 1.15, aO), wT = mix(0.75, 1.15, aT);
+      float lC = (1.0 - smoothstep(wC * 0.6, wC * 1.4, dl.y)) * cer * notO * notT * mix(0.6, 0.95, aC);
+      float lO = (1.0 - smoothstep(wO * 0.6, wO * 1.4, dl.z)) * cer * mix(0.6, 0.95, aO);
+      float lT = (1.0 - smoothstep(wT * 0.6, wT * 1.4, dl.w)) * cer * notO * lat * mix(0.6, 0.95, aT);
+      float lineA = max(lC, max(lO, lT));
       gl_FragColor.rgb = mix(gl_FragColor.rgb, uLine, lineA);
       #include <tonemapping_fragment>`);
 };
 
 // Same lobe math as the shader, so a tap picks exactly the lobe that is drawn.
+const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 function lobeOf(ax, yn, zn) {
-  const s0 = Math.min(yn - 0.26, Math.max(yn - 0.40, zn + 0.22), zn + 0.62);
-  if (s0 < 0) return 0; // brainstem, cerebellum, occipital: reserved
-  const t = Math.max(0, zn - 0.32), top = 0.62 - 0.12 * zn - 3.0 * t * t;
-  if (Math.max(0.30 - ax, -0.62 - zn, zn - 0.60, yn - top) < 0) return 3; // temporal
-  if ((0.25 - 0.32 * (yn - 0.5)) - zn < 0) return 1; // frontal
-  return 2; // parietal
+  const fl = 0.26 + 0.17 * sst(-0.15, -0.55, zn) - 0.10 * sst(0.35, 0.7, ax) * sst(-0.3, 0.0, zn);
+  if (yn - fl < 0) return 0; // brainstem and cerebellum: unassigned
+  const zo = -0.44 - 0.12 * (yn - 0.4) + 0.04 * Math.sin(yn * 3.1) + 0.025 * Math.sin(yn * 13 + ax * 6) + 0.012 * Math.sin(yn * 29 - ax * 4);
+  if (zn - zo < 0) return 4; // occipital
+  const ys = 0.54 - 0.16 * zn + 0.09 * sst(-0.1, -0.45, zn) + 0.018 * Math.sin(zn * 14 + ax * 3) + 0.01 * Math.sin(zn * 33);
+  const td = yn - (ys - 0.13);
+  const tf = 0.42 - 3.2 * td * td;
+  if (Math.max(yn - ys, zn - tf) < 0 && ax > 0.32) return 3; // temporal
+  const zc = 0.02 + 0.42 * (0.95 - yn) + 0.03 * Math.sin(yn * 15 + ax * 5) + 0.018 * Math.sin(yn * 31 - ax * 7);
+  return zn - zc > 0 ? 1 : 2; // frontal or parietal
 }
 let brain = null, brainLen = 1, lobeFace = {};
 new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load('assets/brain.glb', (gltf) => {
@@ -139,7 +167,7 @@ new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load('assets/brain.glb', (glt
   geo.computeBoundingBox();
   const bb = geo.boundingBox, c = new THREE.Vector3(); bb.getCenter(c);
   const S = 1000 / (bb.max.z - bb.min.z); // model units: brain length = 1000
-  const region = new Float32Array(n), sums = { 1: [0, 0, 0, 0], 2: [0, 0, 0, 0], 3: [0, 0, 0, 0] };
+  const region = new Float32Array(n), sums = { 1: [0, 0, 0, 0], 2: [0, 0, 0, 0], 3: [0, 0, 0, 0], 4: [0, 0, 0, 0] };
   const xMax = (bb.max.x - bb.min.x) / 2, yR = bb.max.y - bb.min.y, zH = (bb.max.z - bb.min.z) / 2;
   for (let i = 0; i < n; i++) {
     const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
@@ -155,7 +183,7 @@ new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load('assets/brain.glb', (glt
   geo.computeBoundingSphere(); geo.computeBoundingBox();
   brainLen = 1000;
   // Where to turn so each lobe faces the viewer.
-  for (const r of [1, 2, 3]) {
+  for (const r of [1, 2, 3, 4]) {
     const s = sums[r], x = s[0] / s[3], y = s[1] / s[3], z = s[2] / s[3];
     lobeFace[r] = { yaw: -Math.atan2(x, z), pitch: Math.max(-0.2, Math.min(0.75, Math.atan2(y, Math.hypot(x, z)))) };
   }
@@ -180,6 +208,7 @@ const clampZoom = (z) => Math.min(maxScale / restScale, Math.max(1, z));
 function resize() {
   layoutFlag();
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  uniforms.uPx.value = renderer.getPixelRatio();
   renderer.setSize(W, H, false);
   camera.left = -W / 2; camera.right = W / 2; camera.top = H / 2; camera.bottom = -H / 2; camera.updateProjectionMatrix();
   fitBrain(false);
@@ -300,7 +329,7 @@ let nameTimer = 0;
 function selectMode(m, fromBrain) {
   mode = m;
   const M = MODES[m];
-  uniforms.uActiveV.value.set(M.region === 1 ? 1 : 0, M.region === 2 ? 1 : 0, M.region === 3 ? 1 : 0);
+  uniforms.uActiveV.value.set(M.region === 1 ? 1 : 0, M.region === 2 ? 1 : 0, M.region === 3 ? 1 : 0, M.region === 4 ? 1 : 0);
   if (fromBrain) { activeShown = true; sweepBands(); }
   facing = lobeFace[M.region] || null; faceUntil = performance.now() + 3800;
   const el = $('modeName');
@@ -308,6 +337,12 @@ function selectMode(m, fromBrain) {
     el.textContent = M.name; el.classList.add('show');
     clearTimeout(nameTimer); nameTimer = setTimeout(() => el.classList.remove('show'), 1500);
   }
+  // Mentor swaps both panels to the explainer. No AI call.
+  const local = !!M.local;
+  $('askForm').hidden = local; $('modeIntro').hidden = local;
+  $('mentorLeft').hidden = !local; $('mentorRight').hidden = !local;
+  $('answer').hidden = local; $('historyWrap').hidden = local;
+  if (local) return;
   $('inMode').textContent = M.name;
   $('inHint').textContent = M.hint;
   $('question').placeholder = M.placeholder;
@@ -468,12 +503,14 @@ selectMode('oracle', false);
 window.__sdiSelect = (m) => { if (MODES[m]) selectMode(m, true); };
 window.__sdiState = () => ({ mode, yaw, ready: !!brain });
 window.__sdiProbe = (x, y) => hitBrain(x, y);
+window.__sdiPose = (y, p) => { facing = { yaw: y, pitch: p }; faceUntil = Infinity; };
+window.__sdiFaces = () => lobeFace;
 
 /* ---------- Loop ---------- */
 const clock = new THREE.Clock();
 const angleTo = (from, to) => { let d = (to - from) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 let hoverRegion = 0;
-const amt = [0, 0, 0], hovAmt = [0, 0, 0];
+const amt = [0, 0, 0, 0], hovAmt = [0, 0, 0, 0];
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), now = performance.now();
   uniforms.uTime.value += reduceMotion ? 0 : dt;
@@ -500,7 +537,7 @@ function frame() {
   activeShown = activeShown || thinking;
   // Each lobe fades in or out over about 300 ms.
   const k = Math.min(1, dt * 10), av = uniforms.uActiveV.value.toArray();
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     amt[i] += ((activeShown && av[i] ? 1 : 0) - amt[i]) * k;
     hovAmt[i] += ((hoverRegion === i + 1 ? 1 : 0) - hovAmt[i]) * k;
   }
