@@ -1,2 +1,0 @@
-# superduperintelligence
-superduperintelligence.ca
