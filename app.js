@@ -58,10 +58,28 @@ tilt.add(spin); scene.add(tilt);
 const lift = 0.06; // fraction of brain length to raise the whole brain
 
 const uniforms = {
-  uActive: { value: 1 }, uActiveAmt: { value: 0 }, uThink: { value: 0 }, uTime: { value: 0 },
-  uBright: { value: new THREE.Color('#E8402F') }, uDeep: { value: new THREE.Color('#8E160F') },
+  uAmt: { value: new THREE.Vector3() },   // highlight per lobe: frontal, parietal, temporal
+  uHover: { value: new THREE.Vector3() }, // light hover tint per lobe (desktop)
+  uActiveV: { value: new THREE.Vector3(1, 0, 0) }, // which lobe is the active mode
+  uThink: { value: 0 }, uTime: { value: 0 },
+  uLight: { value: new THREE.Color('#FF6A55') }, uDeep: { value: new THREE.Color('#8E160F') },
+  uLine: { value: new THREE.Color('#FFE3DE') },
+  uBox: { value: new THREE.Vector4(1, 0, 1, 1) },
   uDebug: { value: new URLSearchParams(location.search).has('regions') ? 1 : 0 },
 };
+const LOBE_GLSL = `
+      vec3 lobeField(vec3 p) {
+        float ax = abs(p.x) / uBox.x, yn = (p.y - uBox.y) / uBox.z, zn = p.z / uBox.w;
+        float s0 = min(min(yn - 0.30, max(yn - 0.42, zn + 0.10)), zn + 0.58);
+        float top = 0.53 - 0.13 * zn - 0.9 * max(0.0, zn - 0.28) * max(0.0, zn - 0.28) * 4.0;
+        float sTr = max(max(0.45 - ax, -0.55 - zn), max(zn - 0.52, yn - top));
+        float sFr = (0.25 - 0.32 * (yn - 0.5)) - zn;
+        float sT = max(sTr, -s0);
+        float sF = max(max(sFr, -sTr), -s0);
+        float sP = max(max(-sFr, -sTr), -s0);
+        return vec3(sF, sP, sT);
+      }
+`;
 const material = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.62, metalness: 0.0 });
 material.onBeforeCompile = (s) => {
   Object.assign(s.uniforms, uniforms);
@@ -69,18 +87,43 @@ material.onBeforeCompile = (s) => {
     .replace('#include <common>', '#include <common>\nattribute float region;\nvarying float vRegion;\nvarying vec3 vPos;')
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRegion = region;\nvPos = position;');
   s.fragmentShader = s.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying float vRegion;\nvarying vec3 vPos;\nuniform float uActive, uActiveAmt, uThink, uTime, uDebug;\nuniform vec3 uBright, uDeep;')
+    .replace('#include <common>', '#include <common>\nvarying float vRegion;\nvarying vec3 vPos;\nuniform float uThink, uTime, uDebug;\nuniform vec3 uAmt, uHover, uActiveV, uLight, uDeep, uLine;\nuniform vec4 uBox;' + LOBE_GLSL)
     .replace('#include <color_fragment>', `#include <color_fragment>
-      float inLobe = 1.0 - step(0.5, abs(vRegion - uActive));
-      float act = inLobe * uActiveAmt;
-      diffuseColor.rgb = mix(diffuseColor.rgb, uBright, act * 0.55);
+      // Lobes are smooth curved fields of model position, negative inside.
+      vec3 lf = lobeField(vPos);
+      vec3 own = 1.0 - step(0.0, lf);
+      float act = dot(own, uAmt);
+      float hov = dot(own, uHover);
+      diffuseColor.rgb = mix(diffuseColor.rgb, uLight, clamp(act * 0.6 + hov * 0.22 * (1.0 - act), 0.0, 1.0));
+      float inLobe = dot(own, uActiveV);
       float w = sin(vPos.z * 0.06 + vPos.y * 0.03 - uTime * 2.2);
       w = smoothstep(0.35, 1.0, w);
       diffuseColor.rgb = mix(diffuseColor.rgb, uDeep, w * inLobe * uThink * 0.75);
       if (uDebug > 0.5) { diffuseColor.rgb = vRegion < 0.5 ? vec3(0.3) : vRegion < 1.5 ? vec3(0.9,0.2,0.1) : vRegion < 2.5 ? vec3(0.1,0.5,0.9) : vec3(0.1,0.8,0.3); }
-    `);
+    `)
+    .replace('#include <tonemapping_fragment>', `
+      // Thin boundary lines where a lobe ends: the 0.5 contour of each lobe weight, about 1.5 px wide.
+      vec3 lf2 = lobeField(vPos);
+      vec3 fw = max(fwidth(lf2), vec3(1e-6));
+      vec3 dl = abs(lf2) / fw;
+      vec3 ln = 1.0 - smoothstep(0.35, 1.1, dl);
+      vec3 lnA = 1.0 - smoothstep(0.6, 1.6, dl);
+      float baseLine = max(ln.x, max(ln.y, ln.z)) * 0.7;
+      float activeLine = dot(lnA, uActiveV * uAmt) * 0.95;
+      float lineA = max(baseLine, activeLine);
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, uLine, lineA);
+      #include <tonemapping_fragment>`);
 };
 
+// Same lobe math as the shader, so a tap picks exactly the lobe that is drawn.
+function lobeOf(ax, yn, zn) {
+  const s0 = Math.min(yn - 0.30, Math.max(yn - 0.42, zn + 0.10), zn + 0.58);
+  if (s0 < 0) return 0; // brainstem, cerebellum, occipital: reserved
+  const t = Math.max(0, zn - 0.28), top = 0.53 - 0.13 * zn - 3.6 * t * t;
+  if (Math.max(0.45 - ax, -0.55 - zn, zn - 0.52, yn - top) < 0) return 3; // temporal
+  if ((0.25 - 0.32 * (yn - 0.5)) - zn < 0) return 1; // frontal
+  return 2; // parietal
+}
 let brain = null, brainLen = 1, lobeFace = {};
 new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load('assets/brain.glb', (gltf) => {
   let src = null;
@@ -101,18 +144,13 @@ new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).load('assets/brain.glb', (glt
   for (let i = 0; i < n; i++) {
     const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
     const ax = Math.abs(x - c.x) / xMax, yn = (y - bb.min.y) / yR, zn = (z - c.z) / zH;
-    let r = 0;
-    if (yn < 0.3 || (yn < 0.42 && zn < -0.1)) r = 0;           // brainstem and cerebellum
-    else if (zn < -0.58) r = 0;                                  // occipital, reserved
-    else if (yn < 0.56 && ax > 0.5 && zn > -0.5 && zn < 0.55) r = 3; // temporal
-    else if (zn > 0.18) r = 1;                                   // frontal
-    else if (yn > 0.5) r = 2;                                    // parietal
-    else r = ax > 0.4 ? 3 : 2;
+    const r = lobeOf(ax, yn, zn);
     region[i] = r;
     pos[i * 3] = (x - c.x) * S; pos[i * 3 + 1] = (y - c.y) * S; pos[i * 3 + 2] = (z - c.z) * S;
     if (r && (r !== 3 || x < c.x)) { const s = sums[r]; s[0] += pos[i * 3]; s[1] += pos[i * 3 + 1]; s[2] += pos[i * 3 + 2]; s[3]++; }
   }
   geo.setAttribute('region', new THREE.BufferAttribute(region, 1));
+  uniforms.uBox.value.set(xMax * S, (bb.min.y - c.y) * S, yR * S, zH * S);
   geo.computeVertexNormals();
   geo.computeBoundingSphere(); geo.computeBoundingBox();
   brainLen = 1000;
@@ -173,6 +211,7 @@ function hitBrain(x, y) {
 }
 const inBand = (x) => (x < band ? 'left' : x > W - band ? 'right' : null);
 
+let lastHover = 0;
 let motionAsked = false;
 function askMotion() {
   if (motionAsked) return; motionAsked = true;
@@ -204,6 +243,13 @@ canvas.addEventListener('pointermove', (e) => {
     leanTarget.y = ((e.clientX / W) * 2 - 1) * 0.35;
     leanTarget.x = ((e.clientY / H) * 2 - 1) * 0.2;
     canvas.classList.toggle('over-band', !!inBand(e.clientX) && pointers.size === 0);
+    const t = performance.now();
+    if (pointers.size === 0 && t - lastHover > 60) {
+      lastHover = t;
+      const r = inBand(e.clientX) ? null : hitBrain(e.clientX, e.clientY);
+      hoverRegion = REGION_MODE[r] ? r : 0;
+      canvas.classList.toggle('over-lobe', !!hoverRegion);
+    }
   }
   if (!pointers.has(e.pointerId)) return;
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -231,6 +277,7 @@ function endPointer(e) {
   const d = down; down = null;
   if (performance.now() - lastMove.t > 80) yawVel = 0;
   if (d.moved || e.type === 'pointercancel') return;
+  if (isMobile()) { const open = ['left', 'right'].find((s) => panels[s].classList.contains('open')); if (open) { closePanel(open); return; } }
   const r = hitBrain(e.clientX, e.clientY);
   if (r) { if (REGION_MODE[r]) selectMode(REGION_MODE[r], true); return; }
   const side = inBand(e.clientX);
@@ -238,16 +285,24 @@ function endPointer(e) {
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
-canvas.addEventListener('pointerleave', () => { if (!isMobile()) leanTarget = { x: 0, y: 0 }; });
+canvas.addEventListener('pointerleave', () => { hoverRegion = 0; if (!isMobile()) leanTarget = { x: 0, y: 0 }; });
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomTarget = clampZoom(zoomTarget * Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 /* ---------- Modes ---------- */
+// On a lobe click, a soft sheen sweeps down both closed bands to hint they open.
+const sheens = [...document.querySelectorAll('.sheen')];
+sheens.forEach((el) => el.addEventListener('animationend', () => el.classList.remove('sweep')));
+function sweepBands() {
+  if (reduceMotion || document.querySelector('.panel.open')) return;
+  sheens.forEach((el) => { el.classList.remove('sweep'); void el.offsetWidth; el.classList.add('sweep'); });
+}
 let nameTimer = 0;
 function selectMode(m, fromBrain) {
   mode = m;
   const M = MODES[m];
-  uniforms.uActive.value = M.region;
+  uniforms.uActiveV.value.set(M.region === 1 ? 1 : 0, M.region === 2 ? 1 : 0, M.region === 3 ? 1 : 0);
+  if (fromBrain) { activeShown = true; sweepBands(); }
   facing = lobeFace[M.region] || null; faceUntil = performance.now() + 3800;
   const el = $('modeName');
   if (fromBrain) {
@@ -264,9 +319,11 @@ function selectMode(m, fromBrain) {
 
 /* ---------- Panels ---------- */
 const panels = { left: $('panelLeft'), right: $('panelRight') };
+let openedAt = 0; // ignore the ghost click that follows the opening tap
 function openPanel(side) {
   if (isMobile()) closePanel(side === 'left' ? 'right' : 'left');
   const p = panels[side];
+  activeShown = true; openedAt = performance.now();
   p.classList.add('open'); p.removeAttribute('inert'); p.setAttribute('aria-hidden', 'false');
   if (side === 'left' && !isMobile()) setTimeout(() => $('question').focus({ preventScroll: true }), 300);
 }
@@ -279,26 +336,30 @@ function closePanel(side) {
 }
 for (const side of ['left', 'right']) {
   const p = panels[side];
-  p.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => closePanel(side)));
-  // Swipe down to close on mobile.
+  p.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', () => { if (performance.now() - openedAt > 450) closePanel(side); }));
+  // Swipe back toward its own edge to close on mobile.
+  const dir = side === 'left' ? -1 : 1;
   let start = null;
   p.addEventListener('touchstart', (e) => {
-    const inner = p.querySelector('.panel-inner');
-    const onGrip = e.target.closest('.panel-grip');
-    if (!isMobile() || (!onGrip && inner.scrollTop > 0) || e.target.closest('textarea, input')) return;
-    start = { y: e.touches[0].clientY, t: performance.now() };
+    if (!isMobile() || e.target.closest('textarea, input')) return;
+    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now(), lock: null };
   }, { passive: true });
   p.addEventListener('touchmove', (e) => {
     if (!start) return;
-    const dy = Math.max(0, e.touches[0].clientY - start.y);
-    if (dy > 8) { p.classList.add('dragging'); p.style.setProperty('--drag', dy + 'px'); }
+    const dx = e.touches[0].clientX - start.x, dy = e.touches[0].clientY - start.y;
+    if (!start.lock && Math.hypot(dx, dy) > 10) start.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+    if (start.lock !== 'x') return;
+    const d = Math.max(0, dx * dir);
+    p.classList.add('dragging'); p.style.setProperty('--drag', (d * dir) + 'px');
   }, { passive: true });
-  p.addEventListener('touchend', (e) => {
+  const endSwipe = (e) => {
     if (!start) return;
-    const dy = e.changedTouches[0].clientY - start.y, v = dy / (performance.now() - start.t);
+    const dx = (e.changedTouches[0].clientX - start.x) * dir, v = dx / (performance.now() - start.t), lock = start.lock;
     p.classList.remove('dragging'); p.style.removeProperty('--drag'); start = null;
-    if (dy > 110 || (dy > 40 && v > 0.6)) closePanel(side);
-  });
+    if (lock === 'x' && (dx > 90 || (dx > 35 && v > 0.5))) closePanel(side);
+  };
+  p.addEventListener('touchend', endSwipe);
+  p.addEventListener('touchcancel', endSwipe);
 }
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { const open = ['right', 'left'].find((s) => panels[s].classList.contains('open')); if (open) closePanel(open); }
@@ -402,13 +463,16 @@ function showAnswer(d, record) {
 }
 $('history').addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) showAnswer(history[+li.dataset.i], false); });
 
+let activeShown = false;
 selectMode('oracle', false);
-uniforms.uActiveAmt.value = 0;
+// Test hook: window.__sdiSelect('judge') lights that lobe as if it were tapped.
+window.__sdiSelect = (m) => { if (MODES[m]) selectMode(m, true); };
 
 /* ---------- Loop ---------- */
 const clock = new THREE.Clock();
 const angleTo = (from, to) => { let d = (to - from) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
-let activeShown = false;
+let hoverRegion = 0;
+const amt = [0, 0, 0], hovAmt = [0, 0, 0];
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), now = performance.now();
   uniforms.uTime.value += reduceMotion ? 0 : dt;
@@ -432,9 +496,14 @@ function frame() {
   zoom += (zoomTarget - zoom) * Math.min(1, dt * 8);
   const s = restScale * zoom; tilt.scale.setScalar(s); tilt.position.y = brainLen * s * lift;
   // Lobe tint shows once a mode has been chosen on the brain or a panel is open.
-  activeShown = activeShown || !!facing || thinking;
-  const wantAmt = activeShown ? 1 : 0;
-  uniforms.uActiveAmt.value += (wantAmt - uniforms.uActiveAmt.value) * Math.min(1, dt * 4);
+  activeShown = activeShown || thinking;
+  // Each lobe fades in or out over about 300 ms.
+  const k = Math.min(1, dt * 10), av = uniforms.uActiveV.value.toArray();
+  for (let i = 0; i < 3; i++) {
+    amt[i] += ((activeShown && av[i] ? 1 : 0) - amt[i]) * k;
+    hovAmt[i] += ((hoverRegion === i + 1 ? 1 : 0) - hovAmt[i]) * k;
+  }
+  uniforms.uAmt.value.fromArray(amt); uniforms.uHover.value.fromArray(hovAmt);
   uniforms.uThink.value += ((thinking ? 1 : 0) - uniforms.uThink.value) * Math.min(1, dt * (thinking ? 3 : 1.2));
   renderer.render(scene, camera);
   requestAnimationFrame(frame);

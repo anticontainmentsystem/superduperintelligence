@@ -26,6 +26,24 @@ body { font-family: var(--font); color: var(--white); -webkit-font-smoothing: an
 
 .flag { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; }
 #brain { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: none; outline: none; }
+/* Band sheen: light passing over a waving flag. Two passes, left first. */
+.sheen { position: fixed; top: 0; bottom: 0; width: var(--band); overflow: hidden; pointer-events: none; }
+.sheen-left { left: 0; }
+.sheen-right { right: 0; }
+.sheen::before {
+  content: ""; position: absolute; left: -10%; right: -10%; top: 0; height: 25%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.35), rgba(255,255,255,0));
+  transform: translateY(-110%) skewY(-6deg); opacity: 0;
+}
+.sheen.sweep::before { animation: sheen 1150ms 2 both; }
+.sheen-right.sweep::before { animation-delay: 150ms; }
+@keyframes sheen {
+  0% { transform: translateY(-110%) skewY(-6deg); opacity: 1; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  39% { transform: translateY(150%) skewY(4deg); opacity: 1; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+  78% { transform: translateY(410%) skewY(-5deg); opacity: 1; }
+  78.1%, 100% { transform: translateY(410%) skewY(-5deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .sheen { display: none; } }
 #brain.over-band { cursor: pointer; }
 #brain.dragging { cursor: grabbing; }
 
@@ -59,7 +77,6 @@ body { font-family: var(--font); color: var(--white); -webkit-font-smoothing: an
 .panel-right .panel-edge { left: -9px; }
 .panel-edge::after { content: ""; position: absolute; top: 50%; left: 8px; width: 2px; height: 48px; margin-top: -24px; background: var(--white); opacity: 0; transition: opacity 200ms; border-radius: 1px; }
 .panel-edge:hover::after, .panel-edge:focus-visible::after { opacity: .7; }
-.panel-grip { display: none; }
 
 .eyebrow { margin: 0 0 10px; font-size: 12px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; }
 .eyebrow.small { font-size: 11px; opacity: .85; margin-top: 34px; }
@@ -118,17 +135,25 @@ textarea::placeholder, .options input::placeholder { color: rgba(255,255,255,.55
 .history li span:first-child { opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history li b { font-weight: 600; white-space: nowrap; }
 
-/* Mobile: full-height sheets that slide up, larger text and targets. */
+/* Mobile: panels still slide out of the left and right bands, wider, with larger text and targets. */
 @media (max-width: 760px), (pointer: coarse) and (orientation: portrait) {
-  .panel { left: 0; right: 0; width: auto; top: max(env(safe-area-inset-top), 18px); transform: translateY(105%); border-radius: 0; }
-  .panel-left, .panel-right { transform: translateY(105%); }
-  .panel.open { transform: translateY(var(--drag, 0px)); }
+  :root { --panel-w: 88vw; }
+  .panel { padding-top: env(safe-area-inset-top); }
+  .panel.open { transform: translateX(var(--drag, 0px)); }
   .panel.dragging { transition: none; }
-  .panel-edge { display: none; }
-  .panel-grip { display: block; height: 34px; flex: 0 0 34px; position: relative; touch-action: none; cursor: grab; }
-  .panel-grip::after { content: ""; position: absolute; left: 50%; top: 14px; width: 44px; height: 3px; margin-left: -22px; border-radius: 2px; background: var(--white); opacity: .8; }
-  .panel-inner { padding-top: 14px; padding-bottom: calc(var(--pad) + env(safe-area-inset-bottom)); touch-action: pan-y; }
+  .panel-edge { width: 44px; touch-action: manipulation; }
+  .panel-left .panel-edge { right: -22px; }
+  .panel-right .panel-edge { left: -22px; }
+  .panel-edge::after { left: 12px; opacity: .55; height: 56px; margin-top: -28px; }
+  .panel-right .panel-edge::after { left: 30px; }
+  .panel-inner { padding-bottom: calc(var(--pad) + env(safe-area-inset-bottom)); touch-action: pan-y; }
   .send { display: inline-flex; }
   .mode-name { font-size: 12px; bottom: 7vh; }
-  .eyebrow { font-size: 13px; }
+  .eyebrow { font-size: 14px; }
+  .eyebrow.small { font-size: 13px; }
+  .answer .q, .meta, .sub-top, .history li, .status { font-size: 16px; }
+  .history li { padding: 16px 0; }
+  .options .x { width: 48px; height: 48px; font-size: 24px; }
+  .btn-wide { font-size: 15px; }
 }
+#brain.over-lobe { cursor: pointer; }

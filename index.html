@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
 <link rel="preload" href="assets/brain.glb" as="fetch" crossorigin>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=3">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -27,12 +27,15 @@
     <rect class="flag-band flag-band-right" y="0" height="100%" fill="#D52B1E"/>
   </svg>
 
+  <!-- A sheen that sweeps down the bands on lobe click, hinting they open. -->
+  <div class="sheen sheen-left" aria-hidden="true"></div>
+  <div class="sheen sheen-right" aria-hidden="true"></div>
+
   <canvas id="brain" aria-label="A red brain. Click a lobe to change mode. Click a red band to open it."></canvas>
   <div id="modeName" class="mode-name" aria-live="polite"></div>
 
   <!-- Left band: input. Hidden until the band is clicked. -->
   <section id="panelLeft" class="panel panel-left" data-side="left" aria-hidden="true" inert>
-    <div class="panel-grip" data-close aria-hidden="true"></div>
     <button class="panel-edge" data-close aria-label="Close panel"></button>
     <div class="panel-inner">
       <p class="eyebrow" id="inMode">Oracle</p>
@@ -60,7 +63,6 @@
 
   <!-- Right band: output. -->
   <section id="panelRight" class="panel panel-right" data-side="right" aria-hidden="true" inert>
-    <div class="panel-grip" data-close aria-hidden="true"></div>
     <button class="panel-edge" data-close aria-label="Close panel"></button>
     <div class="panel-inner">
       <div id="answer" class="answer"><p class="hint">Answers land here.</p></div>
@@ -71,6 +73,6 @@
     </div>
   </section>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>
