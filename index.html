@@ -1,1 +1,76 @@
-<!doctype html><html><head><meta charset="utf-8"><title>superduperintelligence</title></head><body><h1>superduperintelligence</h1></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Super Duper Intelligence</title>
+<meta name="description" content="Super Duper Intelligence. Ask, submit, decide.">
+<meta name="theme-color" content="#D52B1E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap" rel="stylesheet">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
+<link rel="preload" href="assets/brain.glb" as="fetch" crossorigin>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+  <!-- The flag. Bands are always left and right. Widths come from --band per version. -->
+  <svg class="flag" aria-hidden="true" preserveAspectRatio="none">
+    <rect class="flag-white" x="0" y="0" width="100%" height="100%" fill="#FFFFFF"/>
+    <rect class="flag-band flag-band-left" x="0" y="0" height="100%" fill="#D52B1E"/>
+    <rect class="flag-band flag-band-right" y="0" height="100%" fill="#D52B1E"/>
+  </svg>
+
+  <canvas id="brain" aria-label="A red brain. Click a lobe to change mode. Click a red band to open it."></canvas>
+  <div id="modeName" class="mode-name" aria-live="polite"></div>
+
+  <!-- Left band: input. Hidden until the band is clicked. -->
+  <section id="panelLeft" class="panel panel-left" data-side="left" aria-hidden="true" inert>
+    <div class="panel-grip" data-close aria-hidden="true"></div>
+    <button class="panel-edge" data-close aria-label="Close panel"></button>
+    <div class="panel-inner">
+      <p class="eyebrow" id="inMode">Oracle</p>
+      <p class="hint" id="inHint">Ask a yes or no question.</p>
+      <form id="askForm" autocomplete="off">
+        <div class="field">
+          <textarea id="question" rows="1" maxlength="500" aria-label="Your question"></textarea>
+          <button type="submit" class="send" aria-label="Send">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+        <div id="guideBox" class="guide" hidden>
+          <p class="eyebrow small">Options</p>
+          <ol id="optionList" class="options"></ol>
+          <div class="row">
+            <button type="button" class="btn" id="addOption">Add option</button>
+            <button type="button" class="btn" id="suggest">Suggest</button>
+          </div>
+          <button type="submit" class="btn btn-wide" id="decideBtn">Decide</button>
+        </div>
+        <p class="status" id="status" role="status"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Right band: output. -->
+  <section id="panelRight" class="panel panel-right" data-side="right" aria-hidden="true" inert>
+    <div class="panel-grip" data-close aria-hidden="true"></div>
+    <button class="panel-edge" data-close aria-label="Close panel"></button>
+    <div class="panel-inner">
+      <div id="answer" class="answer"><p class="hint">Answers land here.</p></div>
+      <div class="history-wrap">
+        <p class="eyebrow small" id="historyTitle" hidden>History</p>
+        <ul id="history" class="history"></ul>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
