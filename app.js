@@ -81,7 +81,7 @@ const LOBE_GLSL = `
         float ax = n.x, yn = n.y, zn = n.z;
         float fl = 0.26 + 0.17 * sst(-0.15, -0.55, zn) - 0.10 * sst(0.35, 0.7, ax) * sst(-0.3, 0.0, zn);
         float zc = 0.02 + 0.42 * (0.95 - yn) + 0.03 * sin(yn * 15.0 + ax * 5.0) + 0.018 * sin(yn * 31.0 - ax * 7.0);
-        float zo = -0.44 - 0.12 * (yn - 0.4) + 0.04 * sin(yn * 3.1) + 0.025 * sin(yn * 13.0 + ax * 6.0) + 0.012 * sin(yn * 29.0 - ax * 4.0);
+        float zo = -0.44 - 0.2 * (yn - 0.4) + 0.04 * sin(yn * 3.1) + 0.025 * sin(yn * 13.0 + ax * 6.0) + 0.012 * sin(yn * 29.0 - ax * 4.0);
         float ys = 0.54 - 0.16 * zn + 0.09 * sst(-0.1, -0.45, zn) + 0.018 * sin(zn * 14.0 + ax * 3.0) + 0.01 * sin(zn * 33.0);
         float td = yn - (ys - 0.13);
         float tf = 0.42 - 3.2 * td * td;
@@ -143,7 +143,7 @@ const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
 function lobeOf(ax, yn, zn) {
   const fl = 0.26 + 0.17 * sst(-0.15, -0.55, zn) - 0.10 * sst(0.35, 0.7, ax) * sst(-0.3, 0.0, zn);
   if (yn - fl < 0) return 0; // brainstem and cerebellum: unassigned
-  const zo = -0.44 - 0.12 * (yn - 0.4) + 0.04 * Math.sin(yn * 3.1) + 0.025 * Math.sin(yn * 13 + ax * 6) + 0.012 * Math.sin(yn * 29 - ax * 4);
+  const zo = -0.44 - 0.2 * (yn - 0.4) + 0.04 * Math.sin(yn * 3.1) + 0.025 * Math.sin(yn * 13 + ax * 6) + 0.012 * Math.sin(yn * 29 - ax * 4);
   if (zn - zo < 0) return 4; // occipital
   const ys = 0.54 - 0.16 * zn + 0.09 * sst(-0.1, -0.45, zn) + 0.018 * Math.sin(zn * 14 + ax * 3) + 0.01 * Math.sin(zn * 33);
   const td = yn - (ys - 0.13);
