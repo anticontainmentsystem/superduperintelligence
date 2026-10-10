@@ -298,6 +298,18 @@ canvas.addEventListener('pointermove', (e) => {
     pitchDrag = Math.max(-0.9, Math.min(0.9, down.pitch + dy * k));
   }
 });
+// A lobe tap picks the mode and opens the left panel with the glide and one sweep
+// (Mentor opens "How it works"). Re-tapping the same lobe after closing the panel leaves it closed;
+// a different lobe opens it again. Nothing opens on page load.
+let lastLobe = null;
+function tapLobe(m) {
+  const same = m === lastLobe; lastLobe = m;
+  const open = panels.left.classList.contains('open');
+  const willOpen = !same && !open;
+  selectMode(m, true, willOpen || (!same && open));
+  if (willOpen) openPanel('left', true);
+  else if (!same && open) sweepPanel('left');
+}
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
@@ -313,7 +325,7 @@ function endPointer(e) {
     if (open) { cancelGlide(); closePanel(open); return; }
   }
   const r = hitBrain(e.clientX, e.clientY);
-  if (r) { if (REGION_MODE[r]) selectMode(REGION_MODE[r], true); return; }
+  if (r) { if (REGION_MODE[r]) tapLobe(REGION_MODE[r]); return; }
   const side = inBand(e.clientX);
   if (side) openPanel(side);
 }
@@ -333,12 +345,12 @@ function sweepBands() {
 }
 let nameTimer = 0;
 const drafts = { guide: '', judge: '', oracle: '' }; // each mode keeps its own text
-function selectMode(m, fromBrain) {
+function selectMode(m, fromBrain, noBandSweep) {
   if (m !== mode && drafts[mode] !== undefined) drafts[mode] = $('question').value;
   mode = m;
   const M = MODES[m];
   uniforms.uActiveV.value.set(M.region === 1 ? 1 : 0, M.region === 2 ? 1 : 0, M.region === 3 ? 1 : 0, M.region === 4 ? 1 : 0);
-  if (fromBrain) { activeShown = true; sweepBands(); }
+  if (fromBrain) { activeShown = true; if (!noBandSweep) sweepBands(); }
   facing = lobeFace[M.region] || null; faceUntil = performance.now() + 3800;
   const el = $('modeName');
   if (fromBrain) {
@@ -358,7 +370,7 @@ function selectMode(m, fromBrain) {
   $('inMode').textContent = M.name;
   $('inHint').textContent = M.hint;
   $('question').placeholder = M.placeholder;
-  $('question').value = drafts[m] || '';
+  $('question').value = drafts[m] || ''; syncClear($('question'));
   $('guideBox').hidden = m !== 'guide';
   $('status').textContent = '';
   if (m === 'guide' && !$('optionList').children.length) { addOption(''); addOption(''); }
@@ -441,11 +453,28 @@ addEventListener('keydown', (e) => {
 });
 
 /* ---------- Input ---------- */
+const X_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 const q = $('question');
+q.after(makeClear(q, () => { if (drafts[mode] !== undefined) drafts[mode] = ''; }));
+syncClear(q);
 // The box has a fixed height and scrolls inside, so typing never reflows the panel.
 q.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !isMobile()) { e.preventDefault(); $('askForm').requestSubmit(); }
 });
+// Clear buttons: a small white x inside the right edge of each text field.
+// Always takes its space (only visibility changes), so typing never shifts the layout.
+function makeClear(field, onClear) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'clear'; b.innerHTML = X_SVG; b.setAttribute('aria-label', 'Clear text'); b.tabIndex = -1;
+  b.addEventListener('pointerdown', (e) => e.preventDefault()); // keep focus and the keyboard
+  b.addEventListener('click', () => {
+    field.value = ''; if (onClear) onClear();
+    field.focus({ preventScroll: true }); syncClear(field);
+  });
+  field._clear = b; return b;
+}
+function syncClear(field) { if (field._clear) field._clear.classList.toggle('on', field.value.length > 0); }
+document.addEventListener('input', (e) => { if (e.target._clear) syncClear(e.target); });
 function addOption(text, focus) {
   const list = $('optionList');
   if (list.children.length >= 8) return;
@@ -454,7 +483,7 @@ function addOption(text, focus) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (e.metaKey || e.ctrlKey) $('askForm').requestSubmit(); else addOption('', true); } });
   const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Remove option');
   x.addEventListener('click', () => li.remove());
-  li.append(input, x); list.append(li);
+  li.append(input, makeClear(input), x); list.append(li); syncClear(input);
   if (focus) input.focus();
 }
 // Mentor: each explainer panel links to the other with the same glide.
@@ -562,6 +591,7 @@ $('history').addEventListener('click', (e) => { const li = e.target.closest('li'
 let activeShown = false;
 selectMode('oracle', false);
 // Test hook: window.__sdiSelect('judge') lights that lobe as if it were tapped.
+window.__sdiTap = (m) => tapLobe(m);
 window.__sdiSelect = (m) => { if (MODES[m]) selectMode(m, true); };
 window.__sdiState = () => ({ mode, yaw, ready: !!brain });
 window.__sdiProbe = (x, y) => hitBrain(x, y);

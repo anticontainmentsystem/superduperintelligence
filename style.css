@@ -218,3 +218,20 @@ body.cue-left .edge-cue { opacity: .75; transition-delay: var(--open); }
   .mode-name { font-size: 24px; bottom: 13vh; }
 }
 @media (prefers-reduced-motion: reduce) { .psheen, .working { animation: none !important; } .psheen { display: none; } }
+
+/* Clear: a small white x inside the right edge of a field. Space is always reserved, so no reflow. */
+.clear {
+  flex: 0 0 36px; width: 36px; height: 36px; align-self: center; border: 0; padding: 0; margin: 0;
+  background: transparent; color: var(--white); cursor: pointer; border-radius: 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  visibility: hidden; opacity: 0; transition: opacity 160ms;
+}
+.clear.on { visibility: visible; opacity: .8; }
+.clear:hover, .clear:focus-visible { opacity: 1; background: rgba(255,255,255,.18); outline: none; }
+.field > .clear { align-self: flex-start; margin-top: 6px; }
+.options li > .clear { margin-right: -6px; }
+.options li > .clear svg { width: 10px; height: 10px; }
+@media (max-width: 760px), (pointer: coarse) and (orientation: portrait) {
+  /* Four lines on phones so the Guide placeholder fits beside the clear button. Still a fixed height. */
+  .field > textarea { height: calc((var(--text) + 3px) * 1.4 * 4 + 18px); }
+}
