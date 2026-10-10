@@ -375,6 +375,8 @@ function selectMode(m, fromBrain, noBandSweep) {
   $('question').placeholder = M.placeholder;
   $('question').value = drafts[m] || ''; syncClear($('question'));
   $('guideBox').hidden = m !== 'guide';
+  // Every mode has a visible submit: Oracle ASK, Judge SCORE, Guide DECIDE (inside the options box).
+  $('askBtn').hidden = m === 'guide'; $('askBtn').textContent = m === 'judge' ? 'Score' : 'Ask';
   $('status').textContent = '';
   if (m === 'guide' && !$('optionList').children.length) { addOption(''); addOption(''); }
 }
@@ -548,7 +550,7 @@ $('askForm').addEventListener('submit', async (e) => {
     if (body.options.length < 2) { $('status').textContent = 'Add at least two options, or tap Suggest.'; return; }
   }
   busy = true; $('status').textContent = 'Thinking.'; setThinking(true);
-  const pressed = e.submitter || (mode === 'guide' ? $('decideBtn') : document.querySelector('#askForm .send'));
+  const pressed = e.submitter && e.submitter.offsetParent ? e.submitter : (mode === 'guide' ? $('decideBtn') : $('askBtn'));
   setWorking(pressed, true);
   const started = performance.now();
   try {
