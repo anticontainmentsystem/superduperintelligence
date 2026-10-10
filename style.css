@@ -16,7 +16,7 @@
   --big: 104px;
   --touch: 40px;
 }
-@media (max-width: 760px), (pointer: coarse) and (orientation: portrait) {
+@media (max-width: 1023px), (pointer: coarse) and (orientation: portrait) {
   /* Mobile version settings */
   :root { --band: 25vw; --pad: 26px; --text: 18px; --big: 120px; --touch: 52px; }
 }
@@ -137,7 +137,7 @@ textarea::placeholder, .options input::placeholder { color: rgba(255,255,255,.55
 .history li b { font-weight: 600; white-space: nowrap; }
 
 /* Mobile: panels still slide out of the left and right bands, wider, with larger text and targets. */
-@media (max-width: 760px), (pointer: coarse) and (orientation: portrait) {
+@media (max-width: 1023px), (pointer: coarse) and (orientation: portrait) {
   :root { --panel-w: 88vw; }
   .panel { padding-top: env(safe-area-inset-top); }
   .panel.open { transform: translateX(var(--drag, 0px)); }
@@ -213,7 +213,7 @@ textarea::placeholder, .options input::placeholder { color: rgba(255,255,255,.55
 .edge-cue { position: fixed; left: 10px; top: 50%; width: 2px; height: 56px; margin-top: -28px; background: var(--white); border-radius: 1px; opacity: 0; pointer-events: none; z-index: 4; transition: opacity 400ms var(--glide); }
 body.cue-left .edge-cue { opacity: .75; transition-delay: var(--open); }
 
-@media (max-width: 760px), (pointer: coarse) and (orientation: portrait) {
+@media (max-width: 1023px), (pointer: coarse) and (orientation: portrait) {
   /* Mobile mode name: twice the size, lifted off the bottom. */
   .mode-name { font-size: 24px; bottom: 13vh; }
 }
@@ -231,7 +231,24 @@ body.cue-left .edge-cue { opacity: .75; transition-delay: var(--open); }
 .field > .clear { align-self: flex-start; margin-top: 6px; }
 .options li > .clear { margin-right: -6px; }
 .options li > .clear svg { width: 10px; height: 10px; }
-@media (max-width: 760px), (pointer: coarse) and (orientation: portrait) {
+@media (max-width: 1023px), (pointer: coarse) and (orientation: portrait) {
   /* Four lines on phones so the Guide placeholder fits beside the clear button. Still a fixed height. */
   .field > textarea { height: calc((var(--text) + 3px) * 1.4 * 4 + 18px); }
+}
+
+/* Close: a small text button pinned to the bottom of each open panel. The content scrolls above it. */
+.panel-foot { flex: 0 0 auto; position: relative; z-index: 2; padding: 6px var(--pad) calc(var(--pad) * .6 + env(safe-area-inset-bottom)); opacity: 0; transition: opacity 400ms var(--ease); }
+.panel.open .panel-foot { opacity: 1; transition-delay: 220ms; }
+.panel-foot .btn.link { margin-top: 0; }
+@media (max-width: 1023px), (pointer: coarse) and (orientation: portrait) {
+  .panel-inner { padding-bottom: 12px; }
+  .panel-foot .btn.link { min-height: 48px; }
+}
+
+/* Narrow desktop (phone layout with a mouse): panels stay band-sized so the brain can glide aside, fully visible. */
+@media (max-width: 1023px) and (not (pointer: coarse)) {
+  :root { --panel-w: max(25vw, 300px); --text: 15px; --big: 96px; --touch: 40px; }
+  .field > textarea { height: calc((var(--text) + 3px) * 1.4 * 3 + 18px); }
+  .send { display: none; }
+  .panel { background: var(--red); }
 }

@@ -6,7 +6,10 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 const RELAY = 'https://sdi-relay.anticontainment-system.workers.dev';
 const RED = '#D52B1E';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const mobileQuery = matchMedia('(max-width: 760px), (pointer: coarse) and (orientation: portrait)');
+// Phone layout also covers narrow desktop windows, where side panels would cover the brain.
+const mobileQuery = matchMedia('(max-width: 1023px), (pointer: coarse) and (orientation: portrait)');
+const touchQuery = matchMedia('(pointer: coarse)');
+const isTouch = () => touchQuery.matches;
 const isMobile = () => mobileQuery.matches;
 
 // Version settings. Each version sets its own sizes.
@@ -268,7 +271,7 @@ canvas.addEventListener('pointerdown', (e) => {
   lastMove = { t: performance.now(), x: e.clientX };
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'mouse' && !isMobile()) {
+  if (e.pointerType === 'mouse' && !isTouch()) {
     leanTarget.y = ((e.clientX / W) * 2 - 1) * 0.35;
     leanTarget.x = ((e.clientY / H) * 2 - 1) * 0.2;
     canvas.classList.toggle('over-band', !!inBand(e.clientX) && pointers.size === 0);
@@ -318,7 +321,7 @@ function endPointer(e) {
   const d = down; down = null;
   if (performance.now() - lastMove.t > 80) yawVel = 0;
   if (d.moved || e.type === 'pointercancel') return;
-  if (isMobile()) {
+  if (isMobile() && isTouch()) {
     const open = ['left', 'right'].find((s) => panels[s].classList.contains('open'));
     // The thin cue on the question side: tap it to glide back to the question panel.
     if (open === 'right' && e.clientX < W * 0.14) { openPanel('left'); return; }
@@ -362,7 +365,7 @@ function selectMode(m, fromBrain, noBandSweep) {
   }
   // Mentor swaps both panels to the explainer. No AI call.
   const local = !!M.local;
-  $('closeStep').textContent = isMobile() ? 'Swipe a panel back toward its edge to close it.' : 'Click the band edge or press Escape to close it.';
+  $('closeStep').textContent = isTouch() ? 'Swipe a panel back toward its edge to close it.' : 'Click the band edge or press Escape to close it.';
   $('askForm').hidden = local; $('modeIntro').hidden = local;
   $('mentorLeft').hidden = !local; $('mentorRight').hidden = !local;
   $('answer').hidden = local; $('historyWrap').hidden = local;
@@ -408,7 +411,7 @@ function showPanel(side) {
   const p = panels[side];
   activeShown = true; openedAt = performance.now();
   p.classList.add('open'); p.removeAttribute('inert'); p.setAttribute('aria-hidden', 'false');
-  if (side === 'left' && !isMobile()) setTimeout(() => $('question').focus({ preventScroll: true }), 300);
+  if (side === 'left' && !isTouch()) setTimeout(() => $('question').focus({ preventScroll: true }), 300);
   syncCue();
 }
 function closePanel(side) {
@@ -459,7 +462,7 @@ q.after(makeClear(q, () => { if (drafts[mode] !== undefined) drafts[mode] = ''; 
 syncClear(q);
 // The box has a fixed height and scrolls inside, so typing never reflows the panel.
 q.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !isMobile()) { e.preventDefault(); $('askForm').requestSubmit(); }
+  if (e.key === 'Enter' && !e.shiftKey && !isTouch()) { e.preventDefault(); $('askForm').requestSubmit(); }
 });
 // Clear buttons: a small white x inside the right edge of each text field.
 // Always takes its space (only visibility changes), so typing never shifts the layout.
@@ -483,7 +486,7 @@ function addOption(text, focus) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (e.metaKey || e.ctrlKey) $('askForm').requestSubmit(); else addOption('', true); } });
   const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Remove option');
   x.addEventListener('click', () => li.remove());
-  li.append(input, makeClear(input), x); list.append(li); syncClear(input);
+  li.append(input, x); list.append(li);
   if (focus) input.focus();
 }
 // Mentor: each explainer panel links to the other with the same glide.
@@ -604,6 +607,7 @@ const clock = new THREE.Clock();
 const angleTo = (from, to) => { let d = (to - from) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 let hoverRegion = 0;
 const amt = [0, 0, 0, 0], hovAmt = [0, 0, 0, 0];
+const aside = { k: 1, x: 0 };
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), now = performance.now();
   uniforms.uTime.value += reduceMotion ? 0 : dt;
@@ -628,7 +632,18 @@ function frame() {
   spin.rotation.y = yaw + lean.y;
   tilt.rotation.x = BASE_PITCH + pitchDrag + lean.x;
   zoom += (zoomTarget - zoom) * Math.min(1, dt * 8);
-  const s = restScale * zoom; tilt.scale.setScalar(s); tilt.position.y = brainLen * s * lift;
+  // Narrow desktop: one panel at a time, and the brain glides aside (and shrinks if needed) so it is never covered.
+  let fitK = 1, shiftX = 0;
+  if (isMobile() && !isTouch()) {
+    const side = panels.left.classList.contains('open') ? 1 : panels.right.classList.contains('open') ? -1 : 0;
+    if (side) {
+      const pw = panels.left.offsetWidth || panels.right.offsetWidth, free = W - pw;
+      fitK = Math.min(1, (free * 0.86) / (brainLen * restScale * zoom * 1.05));
+      shiftX = side * pw / 2;
+    }
+  }
+  aside.k += (fitK - aside.k) * Math.min(1, dt * 4.5); aside.x += (shiftX - aside.x) * Math.min(1, dt * 4.5);
+  const s = restScale * zoom * aside.k; tilt.scale.setScalar(s); tilt.position.y = brainLen * s * lift; tilt.position.x = aside.x;
   // Lobe tint shows once a mode has been chosen on the brain or a panel is open.
   activeShown = activeShown || thinking;
   // Each lobe fades in or out over about 300 ms.
