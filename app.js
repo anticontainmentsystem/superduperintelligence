@@ -590,13 +590,24 @@ function showAnswer(d, record) {
   history.unshift(d); if (history.length > 20) history.pop();
   $('historyTitle').hidden = history.length < 2;
   $('history').innerHTML = history.slice(1).map((h, i) => `<li data-i="${i + 1}"><span>${esc(h.question)}</span><b>${SHORT[h.mode](h)}</b></li>`).join('');
+  $('history').scrollTop = 0; requestAnimationFrame(syncHistFade);
 }
+// History scrolls on its own. Soft fades show only where there is more to see.
+function syncHistFade() {
+  const h = $('history');
+  h.classList.toggle('fade-top', h.scrollTop > 2);
+  h.classList.toggle('fade-bottom', h.scrollTop + h.clientHeight < h.scrollHeight - 2);
+}
+$('history').addEventListener('scroll', syncHistFade, { passive: true });
+addEventListener('resize', () => requestAnimationFrame(syncHistFade));
+panels.right.addEventListener('transitionend', syncHistFade);
 $('history').addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) showAnswer(history[+li.dataset.i], false); });
 
 let activeShown = false;
 selectMode('oracle', false);
 // Test hook: window.__sdiSelect('judge') lights that lobe as if it were tapped.
 window.__sdiTap = (m) => tapLobe(m);
+window.__sdiShow = (d) => showAnswer(d, true);
 window.__sdiSelect = (m) => { if (MODES[m]) selectMode(m, true); };
 window.__sdiState = () => ({ mode, yaw, ready: !!brain });
 window.__sdiProbe = (x, y) => hitBrain(x, y);

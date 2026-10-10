@@ -252,3 +252,23 @@ body.cue-left .edge-cue { opacity: .75; transition-delay: var(--open); }
   .send { display: none; }
   .panel { background: var(--red); }
 }
+
+/* History: its own scroll area filling the answer panel down to the Close button. */
+.panel-right .panel-inner { display: flex; flex-direction: column; }
+.panel-right .panel-inner > .answer, .panel-right .panel-inner > .mentor { flex: 0 0 auto; }
+.history-wrap { flex: 1 1 0; min-height: 140px; display: flex; flex-direction: column; }
+.history-wrap > .eyebrow { flex: 0 0 auto; }
+.history {
+  flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 10px; margin-right: -10px;
+  overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.8) transparent;
+  --ft: 0px; --fb: 0px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ft), #000 calc(100% - var(--fb)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--ft), #000 calc(100% - var(--fb)), transparent 100%);
+}
+.history.fade-top { --ft: 28px; }
+.history.fade-bottom { --fb: 36px; }
+.history::-webkit-scrollbar { width: 2px; }
+.history::-webkit-scrollbar-track { background: transparent; }
+.history::-webkit-scrollbar-thumb { background: rgba(255,255,255,.8); border-radius: 1px; }
+.history::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
