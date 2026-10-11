@@ -87,11 +87,11 @@ body { font-family: var(--font); color: var(--offwhite); -webkit-font-smoothing:
 .hint { margin: 0 0 28px; font-size: var(--text); font-weight: 300; line-height: 1.45; opacity: .92; }
 
 .field { position: relative; display: flex; align-items: flex-end; gap: 8px; border-bottom: 1px solid var(--offwhite); }
-textarea, .options input {
+textarea, .options input, .sharpen-fields input {
   flex: 1; width: 100%; background: transparent; border: 0; outline: none; resize: none; color: var(--offwhite);
   caret-color: var(--offwhite); font: 400 calc(var(--text) + 3px)/1.4 var(--font); padding: 8px 0 10px; min-height: var(--touch);
 }
-textarea::placeholder, .options input::placeholder { color: rgba(243,237,227,.55); }
+textarea::placeholder, .options input::placeholder, .sharpen-fields input::placeholder { color: rgba(243,237,227,.55); }
 ::selection { background: var(--offwhite); color: var(--copper); }
 .send { display: none; border: 0; background: transparent; color: var(--offwhite); width: var(--touch); height: var(--touch); padding: 0; cursor: pointer; align-items: center; justify-content: center; border-radius: 2px; }
 .send:hover, .send:active { background: var(--offwhite); color: var(--copper); }
@@ -115,6 +115,18 @@ textarea::placeholder, .options input::placeholder { color: rgba(243,237,227,.55
 .options .x { border: 0; background: transparent; color: var(--offwhite); font-size: 20px; line-height: 1; width: 34px; height: 34px; cursor: pointer; border-radius: 2px; opacity: .8; }
 .options .x:hover { background: var(--offwhite); color: var(--copper); opacity: 1; }
 .status { min-height: 1.4em; margin: 22px 0 0; font-size: 13px; font-weight: 400; opacity: .9; }
+/* Sharpen (weak answer: fill the gaps, ask again) and the Oracle track record. Same copper theme and button style. */
+.sharpen .eyebrow.small { margin-top: 18px; }
+.sharpen-note { margin: 6px 0 4px; font-size: 13px; line-height: 1.45; opacity: .92; }
+.sharpen-fields label { display: block; border-bottom: 1px solid rgba(243,237,227,.55); padding-top: 10px; }
+.sharpen-fields label span { display: block; font-size: 11px; letter-spacing: .04em; opacity: .8; }
+.sharpen-fields input { font-size: var(--text); padding: 4px 0 8px; }
+.mark { display: flex; gap: 18px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+.mark .btn[aria-pressed="true"] { background: var(--offwhite); color: var(--copper); }
+.mark-state { font-size: 12px; opacity: .85; }
+.history li .oc { font-family: var(--mono); font-weight: 400; font-size: .9em; opacity: .85; margin-left: 6px; }
+.track-big { margin: 0 0 6px; font-size: calc(var(--text) + 3px); font-weight: 600; }
+.track-sub { margin: 0 0 10px; font-size: 13px; line-height: 1.45; opacity: .9; }
 
 /* Answer cards: off-white on copper, big numbers, thin white bars. */
 .answer { animation: none; }

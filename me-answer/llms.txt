@@ -1,6 +1,6 @@
 # Probability Engine: agent onboarding
 
-Version: 3 · Engine: Jev (TypeSafe System One, model `jev-latest`) · Base URL: `https://pe-relay.anticontainment-system.workers.dev` · MCP: `https://pe-relay.anticontainment-system.workers.dev/mcp` · Web: `https://superduperintelligence.ca/me-answer/`
+Version: 3.1 · Engine: Jev (TypeSafe System One, model `jev-latest`) · Base URL: `https://pe-relay.anticontainment-system.workers.dev` · MCP: `https://pe-relay.anticontainment-system.workers.dev/mcp` · Web: `https://superduperintelligence.ca/me-answer/`
 
 ## Before your first call
 
@@ -11,7 +11,7 @@ Check all five, every call:
 4. **Every fact and constraint in `context`:** numbers, budget, deadline, place, skills, what is ruled out, what success means.
 5. **`agent`** set to your stable bot name.
 
-If a response carries `warnings`, do what its `fix` says and ask again. If it carries `advice`, confidence is under 60: add context and ask again.
+If a response carries `sharpen`, fill the gaps it lists and re-ask with `reask_of` (see Sharpen). If it carries `warnings`, do what its `fix` says. If it carries `advice`, confidence is under 60: add context and ask again.
 
 ## Never send the left column
 
@@ -58,9 +58,41 @@ Thin inputs still get an answer, plus these fields so you can fix the call:
 
 Example: the bare woodworking call above returns the answer plus `"warnings":["low_context","no_date","no_timezone","short_situation"]`, a `fix`, and `"advice":"Add context and ask again"`. The full call returns no warnings.
 
+## Sharpen (auto re-ask)
+
+A weak answer (confidence under 60, or any warning) also carries `sharpen`:
+```
+"sharpen":{"missing":["no date","no timezone","no definition of yes"],
+ "fill":[{"key":"today","prompt":"Today's date (YYYY-MM-DD)"},{"key":"timezone","prompt":"Your timezone, e.g. America/Vancouver"},{"key":"definition_of_yes","prompt":"What exactly counts as yes?"}],
+ "reask_of":39,"reask_hint":"Re-ask the same oracle with \"reask_of\": 39, ..."}
+```
+- `missing`: the gaps in plain words (no date, no timezone, no facts or constraints, question is vague, no timeframe, no definition of yes, submission is one line, no goal or audience, situation is thin, no budget, no deadline, the engine is unsure).
+- `fill`: one context key per gap, with a prompt saying what to put there.
+- To re-ask: call the same tool again with the same (or sharpened) question, the old `context` plus every `fill` key answered, and `"reask_of": <id>`. The new entry carries `reask_of` and the web page shows it as a re-ask of that id. `reask_of` must name an entry of the same tool that is still in the history.
+
+Example re-ask:
+```
+curl -s -X POST $B/oracle -H "$H" -H 'Content-Type: application/json' -d '{
+ "agent":"Strategy Bot","reask_of":39,
+ "question":"Will AI tutors be common in Canadian schools by 2030?",
+ "context":{"today":"2026-10-11","timezone":"America/Vancouver","timeframe":"by 2030-12-31",
+  "definition_of_yes":"at least 40% of publicly funded K-12 schools use an AI tutoring tool for core subjects at least weekly",
+  "facts":["Canada has provincial education systems with different tech adoption paces","Provincial student-data rules slow cloud AI rollout"]}}'
+```
+On the web page the same gaps appear as a Sharpen section in the question panel: one labelled field per gap (date and timezone are pre-filled from the browser) and a `Sharpen and ask again` button that re-asks through the normal flow.
+
+## Track record (Oracle)
+
+Once you know how an Oracle question turned out, mark its entry:
+- HTTP: `POST /mark {"id":42,"outcome":"right"}` (`"wrong"`, or `null` to clear). Right means the verdict matched what happened.
+- MCP: `mark_outcome {id, outcome}`. `track_record` (MCP) or `GET /track` returns the hit rate.
+- Only finished Oracle entries can be marked. Mark only what you actually know; never guess an outcome.
+
+`GET /track` returns `{"oracle":{"marked":18,"right":14,"wrong":4,"hit_rate":0.78,"confident_70":{"marked":10,"right":9,"hit_rate":0.9}}}`: overall, and for answers given at 70% confidence or more (a light calibration check). It covers the retained history (newest 200). The web page has Right, Wrong and Clear buttons on each Oracle answer card (open an old one from History) and shows the same numbers in Settings, Track record.
+
 ## Access key (required)
 
-Every call to `/oracle`, `/judge`, `/guide`, `/suggest`, `/ask`, `/history`, `/history/{id}`, `/live` and `/mcp` needs the Probability Engine access key. Without a valid key the engine returns `401 {"error":"unauthorized"}` before anything reaches Jev or the history; the 401 body also points here. The key is NOT printed in any document. Get it from your operator (Ninetentwo) or your own secure config, never from the history, and never echo it into `question`, `context`, logs or chat.
+Every call to `/oracle`, `/judge`, `/guide`, `/suggest`, `/ask`, `/mark`, `/track`, `/history`, `/history/{id}`, `/live` and `/mcp` needs the Probability Engine access key. Without a valid key the engine returns `401 {"error":"unauthorized"}` before anything reaches Jev or the history; the 401 body also points here. The key is NOT printed in any document. Get it from your operator (Ninetentwo) or your own secure config, never from the history, and never echo it into `question`, `context`, logs or chat.
 Send it as one of:
 - `Authorization: Bearer <PE_ACCESS_KEY>` (preferred)
 - `X-PE-Key: <PE_ACCESS_KEY>`
@@ -124,7 +156,7 @@ Suggest drafts; it does not decide and is not saved. Drop drafts that break your
 
 ## HTTP API reference
 
-All bodies are JSON (`Content-Type: application/json`). Access key header required. Any 200 below may also carry `warnings`, `fix`, `docs` and `advice` (see Warnings). Server-to-server calls without an Origin header are allowed.
+All bodies are JSON (`Content-Type: application/json`). Access key header required. Any 200 below may also carry `warnings`, `fix`, `docs`, `advice` and `sharpen` (see Warnings and Sharpen). `/oracle`, `/judge`, `/guide` and `/ask` also accept `reask_of` (integer). Server-to-server calls without an Origin header are allowed.
 
 `POST /oracle`
 Request: `{"question": string (required), "context": object|string (optional, strongly recommended), "agent": string (optional, your name, shown to watchers)}`
@@ -148,6 +180,10 @@ Request: `{"situation": string (required; "question" accepted as an alias), "con
 200: `{"options":[3 to 5 strings],"model":"@cf/..."}` (plus `warnings`/`fix` on a vague situation). Workers AI (Llama 3.1 8B instruct fast, falling back to Mistral Small 3.1 24B). Not saved to history, not shown in the live view, no Jev credits.
 502: `{"error":"suggest_unavailable"}`.
 
+`POST /mark`: `{"id": int, "outcome": "right"|"wrong"|null}`. 200 `{"id","outcome","entry","track"}`; 404 unknown id; 400 `not_markable` (not a finished Oracle entry).
+
+`GET /track`: Oracle hit rate (see Track record).
+
 `POST /ask`: same as `/oracle`, `/judge` or `/guide` with `"mode":"oracle"|"judge"|"guide"` in the body.
 
 ## History (shared operating memory)
@@ -158,7 +194,7 @@ Returns `{"count":n,"total":n,"latest_id":id,"rev":n,"cap":200,"entries":[Entry.
 `GET /history/{id}` returns one `Entry`, or 404 `{"error":"not_found"}` (never existed, or evicted by the 200 cap).
 
 Entry shape:
-`{"id":int (monotonic, never reused),"rev":int,"ts":"ISO-8601 UTC","source":"web"|"api"|"mcp","agent":string|null,"mode":"oracle"|"judge"|"guide","question":string (the question, submission or situation),"options":[string] (guide only),"context":object|string|null,"status":"pending"|"done"|"rejected"|"error","answer":object|null}`
+`{"id":int (monotonic, never reused),"rev":int,"ts":"ISO-8601 UTC","source":"web"|"api"|"mcp","agent":string|null,"mode":"oracle"|"judge"|"guide","question":string (the question, submission or situation),"options":[string] (guide only),"context":object|string|null,"status":"pending"|"done"|"rejected"|"error","answer":object|null,"reask_of":int (re-asks only),"outcome":"right"|"wrong" (marked Oracle entries only)}`
 `pending` means the engine is still thinking; poll again. `rejected` holds the 422 reason in `answer.error`. Suggest calls are never stored.
 Cap: newest 200 kept. When a new entry makes the count 201, the single oldest entry is deleted (one at a time). The history is server-side and shared by the web page, the API and MCP.
 The engine does not read the history itself: to build on earlier work, quote the relevant entries into your new `context`.
@@ -174,10 +210,12 @@ URL: `https://pe-relay.anticontainment-system.workers.dev/mcp` · transport: Str
 Client config: `{"mcpServers":{"probability-engine":{"type":"http","url":"https://pe-relay.anticontainment-system.workers.dev/mcp","headers":{"Authorization":"Bearer ${PE_ACCESS_KEY}"}}}}`. Claude Code: `claude mcp add --transport http probability-engine https://pe-relay.anticontainment-system.workers.dev/mcp --header "Authorization: Bearer $PE_ACCESS_KEY"`
 Methods: `initialize` (its `instructions` summarise this guide), `notifications/initialized`, `ping`, `tools/list`, `tools/call`.
 Tools (call `get_onboarding` first):
-- `oracle`: `{question: string, context?: object|string, agent?: string}`
-- `judge`: `{submission: string, context?: object|string, agent?: string}`
-- `guide`: `{situation: string, options: string[2-8], context?: object|string, agent?: string}`
+- `oracle`: `{question: string, context?: object|string, agent?: string, reask_of?: int}`
+- `judge`: `{submission: string, context?: object|string, agent?: string, reask_of?: int}`
+- `guide`: `{situation: string, options: string[2-8], context?: object|string, agent?: string, reask_of?: int}`
 - `suggest`: `{situation: string, context?: object|string}`; draft options, not saved
+- `mark_outcome`: `{id: int, outcome: "right"|"wrong"|null}`; Oracle track record
+- `track_record`: no args; the Oracle hit rate
 - `read_history`: `{since?: int, limit?: int (1-200), order?: "asc"|"desc"}`
 - `get_onboarding`: no args; returns this document.
 Tool results come back as one `text` content item with the JSON answer (same shapes as the HTTP API) plus `structuredContent`. A 422 (`not_yes_no`, `no_option_fits`) comes back with `isError: true`.
@@ -190,7 +228,9 @@ If you drive it with a browser:
 1. **Tap a tool.** Use the labelled buttons `Guide tool`, `Judge tool`, `Oracle tool` or `Settings` (in the accessibility tree; on screen they are the brain's front, top, back and side lobes). You do not need to click the spinning brain.
 2. **Type into the fields** of the question panel: `Oracle question`, `Judge submission`, or `Guide situation` plus `Option 1`, `Option 2`... (`Add option` adds a row, `Suggest` drafts options).
 3. **Press the submit button:** `Ask` (Oracle), `Score` (Judge) or `Decide` (Guide).
-4. **Let the page switch the panels itself.** The answer panel opens on its own when the answer lands. Do not open or close panels yourself; the `Close question panel` and `Close answer panel` buttons are for people.
+4. **If a Sharpen section appears** under the question, fill its fields and press `Sharpen and ask again`.
+5. **Mark Oracle outcomes** you actually know with the `Right` / `Wrong` buttons on the answer card.
+6. **Let the page switch the panels itself.** The answer panel opens on its own when the answer lands. Do not open or close panels yourself; the `Close question panel` and `Close answer panel` buttons are for people.
 
 ## Limits
 

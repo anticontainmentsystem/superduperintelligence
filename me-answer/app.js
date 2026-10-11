@@ -9,6 +9,7 @@ const RELAY = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   : 'https://pe-relay.anticontainment-system.workers.dev';
 const COPPER = '#B87333';
 const KEY_STORE = 'pe.key', HIST_STORE = 'pe.history.cache', CLIENT_STORE = 'pe.client', ONBOARD_STORE = 'pe.onboarded';
+let sharpenState = null; // the weak answer the Sharpen section would re-ask
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Phone layout also covers narrow desktop windows, where side panels would cover the brain.
 const mobileQuery = matchMedia('(max-width: 1023px), (pointer: coarse) and (orientation: portrait)');
@@ -357,6 +358,7 @@ function selectMode(m, fromBrain, noBandSweep) {
   // A live agent feed is not the person's draft: never save it as one, and clear it when they move on.
   if (m !== mode && drafts[mode] !== undefined && !qBox.classList.contains('terminal')) drafts[mode] = qBox.value;
   if (qBox.classList.contains('terminal') && !livePlaying) endTerminal();
+  if (m !== mode) hideSharpen();
   mode = m;
   const M = MODES[m];
   uniforms.uActiveV.value.set(M.region === 1 ? 1 : 0, M.region === 2 ? 1 : 0, M.region === 3 ? 1 : 0, M.region === 4 ? 1 : 0);
@@ -600,8 +602,12 @@ $('askForm').addEventListener('submit', async (e) => {
     body.options = getOptions();
     if (body.options.length < 2) { $('status').textContent = 'Add at least two options, or tap Suggest.'; return; }
   }
-  busy = true; $('status').textContent = 'Thinking.'; setThinking(true);
   const pressed = e.submitter && e.submitter.offsetParent ? e.submitter : (mode === 'guide' ? $('decideBtn') : $('askBtn'));
+  await sendAsk(body, question, pressed);
+});
+// Sends one oracle/judge/guide call from this page and shows the answer (also used by Sharpen).
+async function sendAsk(body, question, pressed) {
+  busy = true; $('status').textContent = 'Thinking.'; setThinking(true); hideSharpen();
   setWorking(pressed, true);
   const started = performance.now();
   try {
@@ -612,6 +618,7 @@ $('askForm').addEventListener('submit', async (e) => {
     setWorking(null, false);
     showAnswer({ ...data, question, source: 'web' }, true);
     if (data.id) seen.add(data.id);
+    if (data.sharpen) showSharpen({ id: data.id, mode, question, options: body.options || null, context: body.context ?? null, sharpen: data.sharpen });
     openPanel('right', true); // every mode: the answer panel opens by itself, then one sweep
   } catch (err) {
     // 422: the brain understood but the question does not fit the mode. Say so in the answer panel, in theme.
@@ -627,6 +634,60 @@ $('askForm').addEventListener('submit', async (e) => {
   }
   setWorking(null, false);
   busy = false; setThinking(false);
+}
+
+/* ---------- Sharpen: a weak answer lists its gaps; fill them and re-ask, linked to the original ---------- */
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const localZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; } };
+function hideSharpen() { sharpenState = null; $('sharpen').hidden = true; $('sharpenFields').innerHTML = ''; }
+function showSharpen(st) {
+  if (!st.id || !st.sharpen || !st.sharpen.fill || !st.sharpen.fill.length || st.mode !== mode) return;
+  sharpenState = st;
+  $('sharpenNote').textContent = 'Missing: ' + st.sharpen.missing.join(', ') + '. Fill what you can, then ask again.';
+  const box = $('sharpenFields'); box.innerHTML = '';
+  st.sharpen.fill.forEach((f) => {
+    const label = document.createElement('label');
+    const span = document.createElement('span'); span.textContent = f.prompt;
+    const input = document.createElement('input'); input.dataset.key = f.key; input.maxLength = 600; input.setAttribute('aria-label', 'Sharpen: ' + f.prompt);
+    if (f.key === 'today') input.value = localToday();
+    if (f.key === 'timezone') input.value = localZone();
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('sharpenBtn').click(); } });
+    label.append(span, input); box.append(label);
+  });
+  $('sharpenBtn').setAttribute('aria-label', `Sharpen and ask again (re-ask of #${st.id})`);
+  $('sharpen').hidden = false;
+}
+$('sharpenBtn').addEventListener('click', async () => {
+  const st = sharpenState; if (!st || busy || livePlaying) return;
+  const add = {};
+  $('sharpenFields').querySelectorAll('input').forEach((i) => { if (i.value.trim()) add[i.dataset.key] = i.value.trim(); });
+  if (!Object.keys(add).length) { $('status').textContent = 'Fill at least one field.'; return; }
+  const base = st.context == null ? {} : typeof st.context === 'string' ? { notes: st.context } : { ...st.context };
+  const context = { ...base, ...add };
+  if (q.classList.contains('terminal')) endTerminal();
+  const question = q.value.trim() || st.question; // the person may sharpen the question itself too
+  const f = st.mode === 'judge' ? 'submission' : st.mode === 'guide' ? 'situation' : 'question';
+  const body = { [f]: question, context, reask_of: st.id, client: CLIENT };
+  if (st.mode === 'guide') body.options = getOptions().length >= 2 ? getOptions() : st.options;
+  await sendAsk(body, question, $('sharpenBtn'));
+});
+
+/* ---------- Track record: mark Oracle answers right or wrong ---------- */
+function renderTrack() {
+  const o = history.filter((e) => e.mode === 'oracle' && e.status === 'done' && e.outcome);
+  const right = o.filter((e) => e.outcome === 'right').length;
+  const c = o.filter((e) => e.answer && e.answer.confidence >= 70), cr = c.filter((e) => e.outcome === 'right').length;
+  $('trackText').textContent = o.length ? `Oracle: ${right} of ${o.length} right` : 'Oracle: no answers marked yet.';
+  $('trackCal').textContent = c.length ? `Answers at 70% or more: ${cr} of ${c.length} right.` : '';
+}
+$('answer').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-mark]'); if (!b) return;
+  const id = +b.dataset.id, outcome = b.dataset.mark === 'clear' ? null : b.dataset.mark;
+  b.disabled = true;
+  try {
+    const r = await relay('/mark', { id, outcome, client: CLIENT });
+    if (r.entry) { upsert(r.entry); renderHistory(); saveCache(); renderCard(cardOf(r.entry)); }
+  } catch (err) { $('status').textContent = err.message; b.disabled = false; }
 });
 
 /* ---------- Answer cards ---------- */
@@ -637,12 +698,18 @@ const NOTICE = {
   guide: { title: 'None of these options fit.', note: 'Try different ones, or tap Suggest.' },
 };
 // Who asked: shown on every card so watchers can tell web from agents.
-const who = (d) => d.source && d.source !== 'web' ? `<span class="who">${esc(d.agent || 'agent')} · ${esc(d.source)}</span>` : (d.source === 'web' && d.agent ? `<span class="who">${esc(d.agent)}</span>` : '');
+const who = (d) => (d.source && d.source !== 'web' ? `<span class="who">${esc(d.agent || 'agent')} · ${esc(d.source)}</span>` : (d.source === 'web' && d.agent ? `<span class="who">${esc(d.agent)}</span>` : ''))
+  + (d.reask_of ? `<span class="who">re-ask of #${+d.reask_of}</span>` : '');
+// Right / Wrong / Clear on finished Oracle answers (track record).
+const markRow = (d) => !d.id ? '' : `<div class="mark" role="group" aria-label="Track record for Oracle answer #${+d.id}">
+  <button type="button" class="btn" data-mark="right" data-id="${+d.id}" aria-pressed="${d.outcome === 'right'}" aria-label="Mark Oracle answer #${+d.id} right">Right</button>
+  <button type="button" class="btn" data-mark="wrong" data-id="${+d.id}" aria-pressed="${d.outcome === 'wrong'}" aria-label="Mark Oracle answer #${+d.id} wrong">Wrong</button>
+  ${d.outcome ? `<button type="button" class="btn" data-mark="clear" data-id="${+d.id}" aria-label="Clear the mark on Oracle answer #${+d.id}">Clear</button><span class="mark-state">Marked ${d.outcome}</span>` : ''}</div>`;
 const CARDS = {
   notice: (d) => `<p class="eyebrow">${MODES[d.of].name}${who(d)}</p><p class="q">${esc(d.question)}</p>
     <p class="big word">${esc(d.title)}</p><p class="meta notice">${esc(d.note)}</p>`,
   oracle: (d) => `<p class="eyebrow">Oracle${who(d)}</p><p class="q">${esc(d.question)}</p>
-    <p class="big">${d.verdict === 'YES' ? 'Yes' : 'No'}</p><p class="meta">${d.confidence}% confident</p>${bar(d.confidence)}`,
+    <p class="big">${d.verdict === 'YES' ? 'Yes' : 'No'}</p><p class="meta">${d.confidence}% confident</p>${bar(d.confidence)}${markRow(d)}`,
   judge: (d) => `<p class="eyebrow">Judge${who(d)}</p><p class="q">${esc(d.question)}</p>
     <p class="big">${d.score}<small>/ 100</small></p><p class="meta">Overall, ${d.confidence}% confident</p>${bar(d.score)}
     <div class="subs">${['clarity', 'originality', 'risk'].map((k) => `<div><div class="sub-top"><span>${k[0].toUpperCase() + k.slice(1)}</span><b>${d.subscores[k]}</b></div>${bar(d.subscores[k])}</div>`).join('')}</div>`,
@@ -651,6 +718,11 @@ const CARDS = {
     <div class="rank">${d.ranked.map((r) => `<div><div class="sub-top"><span>${esc(r.option)}</span><b>${Math.round(r.probability * 100)}%</b></div>${bar(r.probability * 100)}</div>`).join('')}</div>`,
 };
 const SHORT = { oracle: (d) => `${d.verdict === 'YES' ? 'Yes' : 'No'} ${d.confidence}%`, judge: (d) => `${d.score}/100`, guide: (d) => esc(d.ranked[0].option), notice: () => 'No fit', error: () => 'No answer' };
+function renderCard(d) {
+  const el = $('answer');
+  el.innerHTML = (CARDS[d.mode] || CARDS.notice)(d);
+  el.querySelectorAll('.bar i').forEach((i) => { i.style.transition = 'none'; i.style.width = i.dataset.w + '%'; });
+}
 function showAnswer(d) {
   const el = $('answer');
   el.innerHTML = (CARDS[d.mode] || CARDS.notice)(d);
@@ -668,7 +740,7 @@ try { history = JSON.parse(store.get(HIST_STORE) || '[]').slice(0, HIST_CAP); } 
 history.forEach((e) => seen.add(e.id));
 // A finished entry as a card.
 function cardOf(e) {
-  const base = { question: e.question, source: e.source, agent: e.agent };
+  const base = { question: e.question, source: e.source, agent: e.agent, id: e.id, outcome: e.outcome, reask_of: e.reask_of };
   if (e.status === 'done') return { ...e.answer, ...base, mode: e.mode };
   if (e.status === 'rejected') return { ...base, mode: 'notice', of: e.mode, ...NOTICE[e.mode] || NOTICE.oracle };
   return { ...base, mode: 'notice', of: e.mode, title: 'No answer.', note: (e.answer && e.answer.message) || 'The engine did not answer.' };
@@ -678,7 +750,8 @@ function renderHistory() {
   const done = history.filter((e) => e.status !== 'pending');
   $('historyTitle').hidden = !done.length;
   $('historyTitle').textContent = `History · ${done.length}`;
-  $('history').innerHTML = done.map((e) => `<li data-id="${e.id}"><span>${e.source !== 'web' ? `<em>${esc(e.agent || e.source)}</em> ` : ''}${esc(e.question)}</span><b>${shortOf(e)}</b></li>`).join('');
+  $('history').innerHTML = done.map((e) => `<li data-id="${e.id}"><span>${e.reask_of ? `<em>re #${+e.reask_of}</em> ` : ''}${e.source !== 'web' ? `<em>${esc(e.agent || e.source)}</em> ` : ''}${esc(e.question)}</span><b>${shortOf(e)}${e.outcome ? `<span class="oc">${e.outcome}</span>` : ''}</b></li>`).join('');
+  renderTrack();
   requestAnimationFrame(syncHistFade);
 }
 function upsert(e) {
@@ -706,6 +779,7 @@ async function poll() {
   try {
     const l = await relay('/live?after=' + lastRev);
     lastRev = l.rev;
+    if (l.deleted && l.deleted.length) { const gone = new Set(l.deleted); history = history.filter((h) => !gone.has(h.id)); renderHistory(); saveCache(); }
     for (const e of l.entries) {
       upsert(e);
       // Someone else (an agent, or another browser) asked: play it live, once per entry.
@@ -752,7 +826,7 @@ async function playLive() {
   while (liveQueue.length) {
     const e = byId(liveQueue.shift()); if (!e) continue;
     if (!MODES[e.mode] || MODES[e.mode].local) continue;
-    $('liveDot').hidden = false;
+    $('liveDot').hidden = false; hideSharpen();
     // Keep whatever the person here was typing; it comes back when they tap a field.
     if (liveDraft === null && !MODES[mode].local) liveDraft = { mode, text: q.value, options: getOptions() };
     if (mode !== e.mode) selectMode(e.mode, true, true);
