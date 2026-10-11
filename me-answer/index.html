@@ -39,7 +39,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
 <link rel="preload" href="../assets/brain.glb" as="fetch" crossorigin>
-<link rel="stylesheet" href="style.css?v=pe2">
+<link rel="stylesheet" href="style.css?v=pe3">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -57,12 +57,18 @@
   <div class="sheen sheen-right" aria-hidden="true"></div>
   <div class="edge-cue" aria-hidden="true"></div>
   <canvas id="brain" aria-label="A copper brain. Tap a part of the brain to pick Guide, Judge, Oracle or Settings. Tap a copper band to open it."></canvas>
+  <nav id="toolNav" aria-label="Tools">
+    <button type="button" data-tool="guide" aria-pressed="false">Guide tool</button>
+    <button type="button" data-tool="judge" aria-pressed="false">Judge tool</button>
+    <button type="button" data-tool="oracle" aria-pressed="false">Oracle tool</button>
+    <button type="button" data-tool="settings" aria-pressed="false">Settings</button>
+  </nav>
   <div id="modeName" class="mode-name" aria-live="polite"></div>
-  <div id="liveDot" class="live-dot" hidden><i></i><span>Live</span></div>
+  <div id="liveDot" class="live-dot" role="status" aria-label="Live: an agent call is playing" hidden><i></i><span>Live</span></div>
 
   <!-- Left band: input. -->
-  <section id="panelLeft" class="panel panel-left" data-side="left" aria-hidden="true" inert>
-    <button class="panel-edge" data-close aria-label="Close panel"></button>
+  <section id="panelLeft" class="panel panel-left" data-side="left" aria-label="Question panel" aria-hidden="true" inert>
+    <button class="panel-edge" data-close aria-hidden="true" tabindex="-1"></button>
     <div class="psheen" aria-hidden="true"></div>
     <div class="panel-inner">
       <div id="modeIntro">
@@ -139,12 +145,12 @@
         <p class="status" id="status" role="status"></p>
       </form>
     </div>
-    <div class="panel-foot"><button type="button" class="btn link" data-close>Close</button></div>
+    <div class="panel-foot"><button type="button" class="btn link" data-close aria-label="Close question panel">Close</button></div>
   </section>
 
   <!-- Right band: output. -->
-  <section id="panelRight" class="panel panel-right" data-side="right" aria-hidden="true" inert>
-    <button class="panel-edge" data-close aria-label="Close panel"></button>
+  <section id="panelRight" class="panel panel-right" data-side="right" aria-label="Answer panel" aria-hidden="true" inert>
+    <button class="panel-edge" data-close aria-hidden="true" tabindex="-1"></button>
     <div class="psheen" aria-hidden="true"></div>
     <div class="panel-inner">
       <div id="settingsRight" class="explain settings" hidden>
@@ -241,7 +247,7 @@ Call get_onboarding first.
         <ul id="history" class="history"></ul>
       </div>
     </div>
-    <div class="panel-foot"><button type="button" class="btn link" data-close>Close</button></div>
+    <div class="panel-foot"><button type="button" class="btn link" data-close aria-label="Close answer panel">Close</button></div>
   </section>
 
   <!-- Access key prompt. The key is never in these files; it is typed once and kept in this browser's localStorage. -->
@@ -255,6 +261,6 @@ Call get_onboarding first.
     </form>
   </div>
 
-  <script type="module" src="app.js?v=pe2.1"></script>
+  <script type="module" src="app.js?v=pe3"></script>
 </body>
 </html>

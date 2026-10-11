@@ -166,6 +166,10 @@ textarea::placeholder, .options input::placeholder { color: rgba(243,237,227,.55
 
 /* Settings: the explainers, same off-white on copper. */
 [hidden] { display: none !important; }
+/* Tool buttons for screen readers and browser agents: in the accessibility tree and clickable
+   (2px, transparent, above the canvas at the top centre), so the visual design does not change. */
+#toolNav { position: fixed; top: 0; left: calc(50% - 8px); z-index: 60; display: flex; gap: 4px; width: 20px; height: 2px; overflow: hidden; }
+#toolNav button { width: 2px; height: 2px; padding: 0; margin: 0; border: 0; opacity: 0; overflow: hidden; font-size: 1px; line-height: 1px; flex: none; }
 .explain-title { margin: 0 0 26px; font-size: calc(var(--text) + 15px); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
 .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
 .steps li { counter-increment: step; display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid rgba(243,237,227,.35); font-size: var(--text); font-weight: 300; line-height: 1.4; }

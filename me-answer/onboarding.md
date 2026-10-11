@@ -1,36 +1,62 @@
 # Probability Engine: agent onboarding
 
-Version: 2 · Engine: Jev (TypeSafe System One, model `jev-latest`) · Base URL: `https://pe-relay.anticontainment-system.workers.dev` · MCP: `https://pe-relay.anticontainment-system.workers.dev/mcp` · Web: `https://superduperintelligence.ca/me-answer/`
+Version: 3 · Engine: Jev (TypeSafe System One, model `jev-latest`) · Base URL: `https://pe-relay.anticontainment-system.workers.dev` · MCP: `https://pe-relay.anticontainment-system.workers.dev/mcp` · Web: `https://superduperintelligence.ca/me-answer/`
 
-Read this whole document once before your first call. It is everything you need to use the tool with no other help.
+## Before your first call
+
+Check all five, every call:
+1. **Today's date and your timezone** in `context`: `"today":"2026-10-10","timezone":"America/Vancouver"`.
+2. **One precise question.** Name things exactly. Never "it", "this" or "the plan".
+3. **Definitions.** Say what every fuzzy word means. Oracle: say what counts as yes and by when.
+4. **Every fact and constraint in `context`:** numbers, budget, deadline, place, skills, what is ruled out, what success means.
+5. **`agent`** set to your stable bot name.
+
+If a response carries `warnings`, do what its `fix` says and ask again. If it carries `advice`, confidence is under 60: add context and ask again.
+
+## Never send the left column
+
+Real results from our own cold test (same engine, same day):
+
+| Never send this | Send this |
+|---|---|
+| **Oracle**, no context: `{"question":"Will AI tutors be common in Canadian schools by 2030?"}` gave **YES 60%** | Same question plus `where "common" means at least 40% of publicly funded K-12 schools use an AI tutoring tool for core subjects at least weekly`, and `context` with today, timezone, a definition of "AI tutor" and three facts (provincial systems, current pilots, student-privacy rules) gave **NO 56%**. The answer flipped. |
+| **Guide**, no context: `{"situation":"Choosing a weekend project for a beginner woodworker","options":["Picture frame","Birdhouse","Cutting board"]}` gave **Picture frame, confidence 17** (a near coin toss) | The full situation (finish by Sunday 8 PM PT, hand tools only, table saw and router ruled out, 80 CAD, must be a useful gift) with five concrete options gave **Simple pine cutting board, confidence 71** (76% likely best). |
+
+The left column looks like an answer and is worthless. Full payloads for the right column are in the tool sections below.
+
+## RULE 0: the engine knows nothing you do not send
+
+It has no memory of earlier calls, no access to your conversation, files, the web, the date, or who you are. It is only as good as the data it is given. Be as thorough and specific as possible: if a smart stranger would need to be told something to answer well, tell the engine.
 
 ## What it is
 
-Probability Engine has three ways to ask. Each returns calibrated numbers, not prose:
-- `oracle`: one yes/no question. Returns the probability that the answer is yes, a verdict, and a confidence.
-- `judge`: a submission (idea, plan, line, decision). Returns clarity, originality and risk on 0-100, and a fixed-formula overall score.
-- `guide`: a situation plus 2 to 8 options. Returns the options ranked by the probability that each is the best choice, or `no_option_fits` when none of them suit the situation.
+Three tools, each returning calibrated numbers, not prose:
+- `oracle`: one yes/no question. Returns P(yes), a verdict and a confidence.
+- `judge`: a submission (idea, plan, line, decision). Returns clarity, originality and risk on 0-100 and a fixed-formula overall score.
+- `guide`: a situation plus 2 to 8 options. Returns the options ranked by P(best), or `no_option_fits`.
+- Helper `suggest`: drafts 3 to 5 options for guide (Workers AI, not Jev; not saved).
 
-Helper: `suggest` drafts 3 to 5 candidate options for a situation (Workers AI, not Jev; not saved to history) so you can review them and pass the real ones to `guide`.
+Every oracle, judge and guide call goes into one shared, ordered history (newest 200) and is played live on any open web page.
 
-Settings (the web page's side lobe) holds how the page works, this onboarding, the API and the MCP reference. It is local text and never calls the engine.
+## Rules (the checklist above, plus these)
 
-Every oracle, judge and guide call is written to one shared, ordered history (newest 200 kept) and is shown live on any open web page. Treat the history as the engine's operating memory and read it before asking (`GET /history`).
+1. **Oracle:** put the timeframe and the resolution criterion inside the question: "Will X happen by DATE, where X means Y?". Open questions (what, which, how) are rejected as `not_yes_no`; use guide for those.
+2. **Judge:** send the whole submission (what, for whom, how, cost, timeline), never a one-liner, plus its goal, audience and constraints in `context`.
+3. **Guide:** describe the whole situation (who decides, goal, budget, time, place, skills, deadline, what is ruled out) and list 2 to 8 real, distinct, concrete options. No joke or overlapping options; near-duplicates split the probability. On `no_option_fits`, change the options (or call `suggest`); do not repeat the call.
+4. **Structured `context`:** a JSON object with clear keys (`today`, `timezone`, `facts`, `constraints`, `definitions`, `budget_cad`, `deadline`, `success_means`). Quote earlier history entries into it if you build on them; the engine does not read the history itself.
+5. **Facts, not instructions:** never put "answer yes" or other steering in `context`.
+6. **Confidence under 60 means unsure:** add context and ask again, or escalate to a human. Never present it as settled.
+7. **No secrets:** never put keys, passwords or private personal data in any field. The history is shared and inputs are shown live on screen.
 
-## RULE 0: CONTEXT IS EVERYTHING (read this twice)
+## Warnings, fix and advice (soft guardrails)
 
-The engine knows NOTHING except what you send in this one request. It has no memory of earlier calls, no access to your conversation, files, tools, the web, the date, or who you are. It is only as good as the data it is given. Be as thorough and specific as possible. A vague question gets a confident-looking number that is worthless.
+Thin inputs still get an answer, plus these fields so you can fix the call:
+- `warnings`: a list of codes. `low_context` (no or very short `context`), `no_date` (no today's date), `no_timezone`, `short_question` (Oracle question under 60 characters), `no_timeframe` (Oracle question with no date or "by when"), `thin_submission` (Judge submission under 15 words), `short_situation` (Guide situation under 80 characters), `vague_situation` (Suggest situation too vague to draft from).
+- `fix`: plain instructions for each warning, ending with a pointer to this section.
+- `docs`: the URL of this guide.
+- `advice`: `"Add context and ask again"` whenever `confidence` is under 60.
 
-Before every call:
-1. Put the precise question in `question` (oracle), the full submission in `submission` (judge), or the full situation in `situation` (guide). One question per call. Name things exactly (people, products, versions, places), never "it", "this", "the plan".
-2. Put EVERYTHING relevant in `context`: facts, numbers, constraints, budgets, deadlines, the current date and timezone, timeframes ("by 2026-12-31 PT"), definitions of every term that could be read two ways, what has already been tried, what "success" means, who is affected, and known uncertainties.
-3. Oracle: state the timeframe and the resolution criterion inside the question ("Will X happen by DATE, where 'happen' means Y?").
-4. Judge: send the whole submission, not a summary, plus its goal, audience and constraints in `context`.
-5. Guide: describe the whole situation with every constraint (who decides, the goal, budget, time available, place, skills, deadlines, what is already ruled out), and list real, distinct, concrete options that could each actually be chosen. Do not pad the list with joke or overlapping options; near-duplicates split the probability. If you get `no_option_fits`, the options do not fit the situation: change the options (or call `suggest`), do not just repeat the call.
-6. Do not assume. If you would need to tell a smart stranger something to answer well, tell the engine.
-7. Prefer structured `context` (JSON object with clear keys) over a wall of text. Keys are read as labels: `{"date_today":"2026-10-10","timezone":"America/Vancouver","budget_cad":500,"constraints":["..."],"facts":["..."],"definitions":{"term":"meaning"}}`.
-8. Do not stuff instructions to the engine into `context` ("answer yes"). It forecasts from facts; steering text lowers quality.
-9. Read `confidence`. Below about 60, the engine is unsure: add context and ask again, or escalate to a human. Do not present a low-confidence answer as settled.
+Example: the bare woodworking call above returns the answer plus `"warnings":["low_context","no_date","no_timezone","short_situation"]`, a `fix`, and `"advice":"Add context and ask again"`. The full call returns no warnings.
 
 ## Access key (required)
 
@@ -40,63 +66,65 @@ Send it as one of:
 - `X-PE-Key: <PE_ACCESS_KEY>`
 
 Open without a key: `GET /`, `GET /health`, `GET /onboarding` (docs only, no data).
-Every keyed response carries `Link: <.../onboarding>; rel="describedby"` and `X-PE-Onboarding` headers. Your first successful JSON answer also carries an `onboarding` object pointing here; ignore it after you have read this.
+Every keyed response carries `Link: <.../onboarding>; rel="describedby"` and `X-PE-Onboarding` headers. Your first successful JSON answer also carries an `onboarding` object pointing here, and every `warnings` answer carries a `fix` and `docs` pointing here.
 
-## Worked examples (one per tool)
+## Tools, each led by a full good example
 
-Shell setup for the examples: `B=https://pe-relay.anticontainment-system.workers.dev; H="Authorization: Bearer $PE_ACCESS_KEY"`. The numbers shown come from testing; yours will differ slightly.
+Shell setup: `B=https://pe-relay.anticontainment-system.workers.dev; H="Authorization: Bearer $PE_ACCESS_KEY"`. Numbers come from our tests; yours will differ slightly.
 
-### Oracle
+### Oracle (yes/no probability)
 
-Bad: `{"question":"Will it work?"}`
-Good:
 ```
 curl -s -X POST $B/oracle -H "$H" -H 'Content-Type: application/json' -d '{
  "agent":"Strategy Bot",
- "question":"Will it rain at Vancouver International Airport (YVR) on at least 15 days in November 2026, where a rain day means at least 0.2 mm?",
- "context":{"today":"2026-10-10","timezone":"America/Vancouver","climate_normal":"YVR averages about 20 days with measurable rain in November"}}'
+ "question":"Will AI tutors be common in Canadian schools by 2030, where \"common\" means at least 40% of publicly funded K-12 schools use an AI tutoring tool for core subjects at least weekly?",
+ "context":{"today":"2026-10-10","timezone":"America/Vancouver",
+  "definitions":{"AI tutor":"software that gives personalized instruction or practice feedback using a large language model or similar generative model"},
+  "facts":["Canada has provincial education systems with different tech adoption paces","Several Canadian school boards already pilot ChatGPT-style tools under policy constraints","Privacy law (PIPEDA / provincial student-data rules) slows cloud AI rollout"],
+  "timeframe":"by 2030-12-31"}}'
 ```
-200: `{"id":12,"mode":"oracle","verdict":"YES","yes":true,"probability":0.73,"confidence":73,"applies":0.98}`
-An open question such as `"What should I eat for dinner?"` gives 422 `{"id":13,"error":"not_yes_no","message":"..."}`. Rephrase it as yes/no, or use guide.
+200: `{"id":16,"mode":"oracle","verdict":"NO","yes":false,"probability":0.44,"confidence":56,"applies":0.96,"advice":"Add context and ask again"}`
+Confidence 56 is honest: the outcome really is close. Bare, the same topic said YES 60% with warnings `low_context`, `no_date`, `no_timezone`, `short_question`.
+An open question such as `"What should I eat for dinner?"` gives 422 `{"error":"not_yes_no"}`. Rephrase it as yes/no, or use guide.
 
-### Judge
+### Judge (score 0-100)
 
 ```
 curl -s -X POST $B/judge -H "$H" -H 'Content-Type: application/json' -d '{
  "agent":"Strategy Bot",
- "submission":"Launch Great Creation Studios with a 60-second film made entirely by agents, released on X and YouTube on the same day.",
- "context":{"goal":"awareness for a new studio","budget_cad":0,"team":"AI agents plus one human","audience":"indie creators"}}'
+ "submission":"Weekly Fresh Loaf Club: households in Canadian towns under 15,000 people pay 28 CAD per month and receive one artisan sourdough loaf each week. A partner bakery within 50 km bakes on a fixed schedule; a local contractor delivers doorstep on one weekday morning. No cold chain. First towns: Salmon Arm and Nelson, BC. Marketing via community Facebook groups and one bakery window flyer. Seed budget under 20,000 CAD; founder drives first two routes.",
+ "context":{"today":"2026-10-10","timezone":"America/Vancouver","goal":"break even in 12 months","audience":"households in small Canadian towns who buy supermarket bread",
+  "constraints":["low delivery density","partner bakery capacity 40 loaves/week to start","no refrigerated van","founder is sole operator for first 90 days"]}}'
 ```
-200: `{"id":14,"mode":"judge","score":58,"confidence":64,"subscores":{"clarity":82,"originality":43,"risk":58}}`
-A bare `"Just do it."` scores about 34: it is short, a cliche, and gives the engine nothing to weigh.
+200: `{"id":23,"mode":"judge","score":55,"confidence":67,"subscores":{"clarity":83,"originality":35,"risk":63}}`
+A bare `"Just do it."` scores 32 with confidence 38 and comes back with `thin_submission` and advice: it gives the engine nothing to weigh.
 
-### Guide
+### Guide (rank options)
 
-Bad: `{"situation":"What should I do?","options":["A","B"]}`
-Good:
 ```
 curl -s -X POST $B/guide -H "$H" -H 'Content-Type: application/json' -d '{
- "agent":"Travel Bot",
- "situation":"Ninetentwo needs to get from downtown Vancouver to downtown Victoria, BC by 9 PM PT tonight (Saturday 2026-10-10). Leaving after 5 PM, one carry-on bag, budget 300 CAD, no car.",
- "options":["BC Ferries foot passenger plus bus","Harbour Air seaplane","Paint the fence"],
- "context":{"today":"2026-10-10","timezone":"America/Vancouver","priorities":["arrive by 9 PM","cost"]}}'
+ "agent":"Maker Bot",
+ "situation":"Ninetentwo is choosing a weekend woodworking project for a true beginner. Window: Saturday 2026-10-11 and Sunday 2026-10-12 only, finish by Sunday 8 PM America/Vancouver. Space: one garage workbench. Tools available: hand saw, cordless drill, sandpaper, wood glue, measuring tape, clamps. Ruled out: table saw, power planer, router. Budget: about 80 CAD for lumber and finish. Goal: a finished useful object that can be gifted.",
+ "options":["Simple pine cutting board (no handles, food-safe oil finish)","Small wall shelf with two store-bought brackets","Birdhouse from a basic kit-style plan (pre-cut optional)","Decorative wooden coat rack with 3 pegs","Full dining table with mortise-and-tenon joinery"],
+ "context":{"today":"2026-10-10","timezone":"America/Vancouver","skill_level":"beginner; no prior furniture builds","budget_cad":80,"deadline":"2026-10-12T20:00:00-07:00",
+  "priorities":["finishable in one weekend","useful gift","matches beginner tools"],"success_means":"assembled, sanded, finished and giftable by Sunday 8 PM PT"}}'
 ```
-200: `{"id":15,"mode":"guide","choice":"BC Ferries foot passenger plus bus","confidence":45,"ranked":[{"option":"BC Ferries foot passenger plus bus","probability":0.61},{"option":"Harbour Air seaplane","probability":0.38},{"option":"Paint the fence","probability":0.01}],"none_probability":0.03}`
-The same trip with options `["Bake bread","Learn guitar","Paint the fence"]` gives 422 `{"id":16,"error":"no_option_fits","message":"...","none_probability":1}`.
+200: `{"id":25,"mode":"guide","choice":"Simple pine cutting board (no handles, food-safe oil finish)","confidence":71,"ranked":[{"option":"Simple pine cutting board (no handles, food-safe oil finish)","probability":0.76},{"option":"Small wall shelf with two store-bought brackets","probability":0.16},{"option":"Birdhouse from a basic kit-style plan (pre-cut optional)","probability":0.04},{"option":"Decorative wooden coat rack with 3 pegs","probability":0.04},{"option":"Full dining table with mortise-and-tenon joinery","probability":0}],"none_probability":0}`
+Options that do not fit the situation at all (say `["Bake bread","Learn guitar","Paint the fence"]`) give 422 `{"error":"no_option_fits"}`.
 
-### Suggest (helper for guide)
+### Suggest (draft options for guide)
 
 ```
 curl -s -X POST $B/suggest -H "$H" -H 'Content-Type: application/json' -d '{
- "situation":"Get from downtown Vancouver to downtown Victoria, BC by 9 PM PT tonight, budget 300 CAD, no car.",
- "context":{"today":"2026-10-10"}}'
+ "situation":"A true beginner woodworker wants one project to finish this weekend as a gift, hand tools only (saw, drill, clamps, sandpaper), budget 80 CAD.",
+ "context":{"today":"2026-10-10","ruled_out":["table saw","router"]}}'
 ```
-200: `{"options":["Take the BC Ferry and bus","Fly Harbour Air seaplane","Take the Helijet","Stay home tonight"],"model":"@cf/meta/llama-3.1-8b-instruct-fast"}`
-Check the drafts against your constraints, drop the ones that do not fit, add your own, then call guide.
+200: `{"options":["...3 to 5 short, real, distinct options..."],"model":"@cf/meta/llama-3.1-8b-instruct-fast"}`
+Suggest drafts; it does not decide and is not saved. Drop drafts that break your constraints, add your own, then call guide. A vague situation (say `"Pick a project"`) comes back with `vague_situation`.
 
 ## HTTP API reference
 
-All bodies are JSON (`Content-Type: application/json`). Access key header required. Server-to-server calls without an Origin header are allowed.
+All bodies are JSON (`Content-Type: application/json`). Access key header required. Any 200 below may also carry `warnings`, `fix`, `docs` and `advice` (see Warnings). Server-to-server calls without an Origin header are allowed.
 
 `POST /oracle`
 Request: `{"question": string (required), "context": object|string (optional, strongly recommended), "agent": string (optional, your name, shown to watchers)}`
@@ -117,7 +145,7 @@ Request: `{"situation": string (required; "question" accepted as an alias), "opt
 
 `POST /suggest`
 Request: `{"situation": string (required; "question" accepted as an alias), "context": object|string (optional)}`
-200: `{"options":[3 to 5 strings],"model":"@cf/..."}`. Workers AI (Llama 3.1 8B instruct fast, falling back to Mistral Small 3.1 24B). Not saved to history, not shown in the live view, no Jev credits.
+200: `{"options":[3 to 5 strings],"model":"@cf/..."}` (plus `warnings`/`fix` on a vague situation). Workers AI (Llama 3.1 8B instruct fast, falling back to Mistral Small 3.1 24B). Not saved to history, not shown in the live view, no Jev credits.
 502: `{"error":"suggest_unavailable"}`.
 
 `POST /ask`: same as `/oracle`, `/judge` or `/guide` with `"mode":"oracle"|"judge"|"guide"` in the body.
@@ -155,9 +183,14 @@ Tools (call `get_onboarding` first):
 Tool results come back as one `text` content item with the JSON answer (same shapes as the HTTP API) plus `structuredContent`. A 422 (`not_yes_no`, `no_option_fits`) comes back with `isError: true`.
 Example: `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"guide","arguments":{"agent":"MCP Bot","situation":"...full situation...","options":["...","..."]}}}`
 
-## Web
+## Using the web page
 
-`https://superduperintelligence.ca/me-answer/`: tap a lobe of the brain to pick a tool: front lobe Guide (situation, options, Add option, Suggest, Decide), top lobe Judge (Score), back lobe Oracle (Ask). The side lobe is Settings. Open the left copper band to type; the right band shows the answer and the shared history. The page asks for the access key once, keeps it in that browser's localStorage, and opens Settings at Onboarding the first time.
+`https://superduperintelligence.ca/me-answer/` (asks for the access key once, keeps it in that browser, and opens Settings at Onboarding the first time).
+If you drive it with a browser:
+1. **Tap a tool.** Use the labelled buttons `Guide tool`, `Judge tool`, `Oracle tool` or `Settings` (in the accessibility tree; on screen they are the brain's front, top, back and side lobes). You do not need to click the spinning brain.
+2. **Type into the fields** of the question panel: `Oracle question`, `Judge submission`, or `Guide situation` plus `Option 1`, `Option 2`... (`Add option` adds a row, `Suggest` drafts options).
+3. **Press the submit button:** `Ask` (Oracle), `Score` (Judge) or `Decide` (Guide).
+4. **Let the page switch the panels itself.** The answer panel opens on its own when the answer lands. Do not open or close panels yourself; the `Close question panel` and `Close answer panel` buttons are for people.
 
 ## Limits
 
@@ -180,5 +213,4 @@ Request body 20000 bytes; `question`, `submission`, `situation` 2000 characters;
 ## Etiquette
 
 - Every oracle, judge and guide call spends real Jev credits. Ask once, well, with full context. Do not loop or fan out the same question.
-- Set `agent` to your stable bot name so humans and other agents can tell who asked.
-- Never put secrets, keys, passwords or private personal data in `question`, `situation`, `options` or `context`: the history is readable by anyone who holds the access key, and it is typed live on screen.
+- Humans watch the live view: write inputs you would be happy to have read.

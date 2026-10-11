@@ -376,8 +376,10 @@ function selectMode(m, fromBrain, noBandSweep) {
   $('askForm').hidden = !!local; $('modeIntro').hidden = !!local;
   $('settingsLeft').hidden = local !== 'settings'; $('settingsRight').hidden = local !== 'settings';
   $('answer').hidden = !!local; $('historyWrap').hidden = !!local;
+  document.querySelectorAll('#toolNav [data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === m)));
   if (local) return;
   $('inMode').textContent = M.name;
+  $('question').setAttribute('aria-label', m === 'judge' ? 'Judge submission' : m === 'guide' ? 'Guide situation' : 'Oracle question');
   $('inHint').textContent = M.hint;
   $('question').placeholder = M.placeholder;
   $('question').value = drafts[m] || ''; syncClear($('question'));
@@ -491,16 +493,23 @@ function addOption(text, focus) {
   const list = $('optionList');
   if (list.children.length >= 8) return null;
   const li = document.createElement('li');
-  const input = document.createElement('input'); input.maxLength = 120; input.value = text; input.placeholder = 'Option'; input.setAttribute('aria-label', 'Option');
+  const input = document.createElement('input'); input.maxLength = 120; input.value = text; input.placeholder = 'Option'; input.setAttribute('aria-label', 'Option ' + (list.children.length + 1));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (e.metaKey || e.ctrlKey) $('askForm').requestSubmit(); else addOption('', true); } });
   input.addEventListener('focus', () => { if (q.classList.contains('terminal') && !livePlaying) endTerminal(); });
-  const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Remove option');
-  x.addEventListener('click', () => { if (!livePlaying) li.remove(); });
+  const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Remove option ' + (list.children.length + 1));
+  x.addEventListener('click', () => { if (!livePlaying) { li.remove(); relabelOptions(); } });
   li.append(input, x); list.append(li);
   if (focus) input.focus();
   return input;
 }
 $('addOption').addEventListener('click', () => { if (q.classList.contains('terminal') && !livePlaying) endTerminal(); addOption('', true); });
+function relabelOptions() { [...$('optionList').children].forEach((li, i) => { const inp = li.querySelector('input'), x = li.querySelector('.x'); if (inp) inp.setAttribute('aria-label', 'Option ' + (i + 1)); if (x) x.setAttribute('aria-label', 'Remove option ' + (i + 1)); }); }
+// Hidden, labelled tool buttons: pick a tool without hunting on the canvas (same as tapping its lobe).
+document.querySelectorAll('#toolNav [data-tool]').forEach((b) => b.addEventListener('click', () => {
+  const m = b.dataset.tool;
+  if (m === lastLobe && !panels.left.classList.contains('open')) { selectMode(m, true, true); openPanel('left', true); }
+  else tapLobe(m);
+}));
 const getOptions = () => [...$('optionList').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
 const setOptions = (opts) => { $('optionList').innerHTML = ''; opts.forEach((o) => addOption(o)); };
 // Settings: section links scroll inside the panel (no page jump, no hash change).
@@ -739,6 +748,7 @@ async function typeInto(el, text, perStep) {
 async function playLive() {
   if (livePlaying || !liveQueue.length || busy) return;
   livePlaying = true;
+  try {
   while (liveQueue.length) {
     const e = byId(liveQueue.shift()); if (!e) continue;
     if (!MODES[e.mode] || MODES[e.mode].local) continue;
@@ -770,8 +780,12 @@ async function playLive() {
     q.readOnly = false;
     await sleep(liveQueue.length ? 1200 : 400);
   }
-  $('liveDot').hidden = true;
-  livePlaying = false;
+  } catch (err) { setThinking(false); setWorking(null, false); q.readOnly = false; }
+  finally {
+    // Live is on only while an agent call is playing; it always turns off when idle.
+    $('liveDot').hidden = true;
+    livePlaying = false;
+  }
 }
 // Tap the box after a live feed to get your own draft back (pointerdown too, in case the box already has focus).
 const backToDraft = () => { if (q.classList.contains('terminal') && !livePlaying) endTerminal(); };
