@@ -272,3 +272,5 @@ body.cue-left .edge-cue { opacity: .75; transition-delay: var(--open); }
 .history::-webkit-scrollbar-track { background: transparent; }
 .history::-webkit-scrollbar-thumb { background: rgba(255,255,255,.8); border-radius: 1px; }
 .history::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+/* A gentle note when the question does not fit the mode. */
+.meta.notice { line-height: 1.45; opacity: .92; letter-spacing: .02em; }

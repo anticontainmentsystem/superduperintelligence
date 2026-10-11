@@ -3,7 +3,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
-const RELAY = 'https://sdi-relay.anticontainment-system.workers.dev';
+// Staging (next.) and local testing use the staging relay; the live site uses the live relay. Same file on both sites.
+const RELAY = /^(next\.|localhost$|127\.0\.0\.1$)/.test(location.hostname)
+  ? 'https://sdi-relay-next.anticontainment-system.workers.dev'
+  : 'https://sdi-relay.anticontainment-system.workers.dev';
 const RED = '#D52B1E';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Phone layout also covers narrow desktop windows, where side panels would cover the brain.
@@ -503,7 +506,7 @@ const getOptions = () => [...$('optionList').querySelectorAll('input')].map((i) 
 async function relay(path, body) {
   const r = await fetch(RELAY + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || 'The brain is busy. Try again in a moment.');
+  if (!r.ok) { const err = new Error(data.error || 'The brain is busy. Try again in a moment.'); err.status = r.status; throw err; }
   return data;
 }
 // Working state: the pressed button pulses and a slow sheen loops down the question panel.
@@ -561,7 +564,17 @@ $('askForm').addEventListener('submit', async (e) => {
     setWorking(null, false);
     showAnswer({ ...data, question }, true);
     openPanel('right', true); // every mode: the answer panel opens by itself, then one sweep
-  } catch (err) { $('status').textContent = err.message; }
+  } catch (err) {
+    // 422: the brain understood but the question does not fit the mode. Say so in the answer panel, in theme.
+    if (err.status === 422 && NOTICE[mode]) {
+      const wait = Math.max(0, 1100 - (performance.now() - started));
+      await new Promise((r) => setTimeout(r, wait));
+      $('status').textContent = '';
+      setWorking(null, false);
+      showAnswer({ mode: 'notice', of: mode, question, ...NOTICE[mode] }, false);
+      openPanel('right', true);
+    } else $('status').textContent = err.message;
+  }
   setWorking(null, false);
   busy = false; setThinking(false);
 });
@@ -569,11 +582,17 @@ $('askForm').addEventListener('submit', async (e) => {
 /* ---------- Answer cards ---------- */
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const bar = (pct) => `<div class="bar"><i data-w="${Math.max(0, Math.min(100, pct))}"></i></div>`;
+const NOTICE = {
+  oracle: { title: 'Ask a yes or no question.', note: 'That one needs a different kind of answer. Rephrase it, or use Guide to compare options.' },
+  guide: { title: 'None of these options fit.', note: 'Try different ones, or tap Suggest.' },
+};
 const CARDS = {
+  notice: (d) => `<p class="eyebrow">${MODES[d.of].name}</p><p class="q">${esc(d.question)}</p>
+    <p class="big word">${esc(d.title)}</p><p class="meta notice">${esc(d.note)}</p>`,
   oracle: (d) => `<p class="eyebrow">Oracle</p><p class="q">${esc(d.question)}</p>
     <p class="big">${d.verdict === 'YES' ? 'Yes' : 'No'}</p><p class="meta">${d.confidence}% confident</p>${bar(d.confidence)}`,
   judge: (d) => `<p class="eyebrow">Judge</p><p class="q">${esc(d.question)}</p>
-    <p class="big">${d.score}<small>/ 100</small></p><p class="meta">Overall</p>${bar(d.score)}
+    <p class="big">${d.score}<small>/ 100</small></p><p class="meta">Overall, ${d.confidence}% confident</p>${bar(d.score)}
     <div class="subs">${['clarity', 'originality', 'risk'].map((k) => `<div><div class="sub-top"><span>${k[0].toUpperCase() + k.slice(1)}</span><b>${d.subscores[k]}</b></div>${bar(d.subscores[k])}</div>`).join('')}</div>`,
   guide: (d) => `<p class="eyebrow">Guide</p><p class="q">${esc(d.question)}</p>
     <p class="big word">${esc(d.ranked[0].option)}</p><p class="meta">${Math.round(d.ranked[0].probability * 100)}% likely the best choice</p>
