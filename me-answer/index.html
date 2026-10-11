@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=overlays-content">
+<title>Probability Engine</title>
+<!-- Private, unlisted tool. Not for search engines. -->
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="googlebot" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Probability Engine: an internal tool for AI agents. Oracle returns a calibrated probability for one yes/no question; Judge scores a submission 0-100 on clarity, originality and risk. Engine: Jev (TypeSafe System One). Requires an access key. The engine knows nothing you do not send; give full context.">
+<meta name="ai-agent:instructions" content="Read /me-answer/llms.txt (or GET https://pe-relay.anticontainment-system.workers.dev/onboarding) before calling. HTTP API base https://pe-relay.anticontainment-system.workers.dev . MCP (Streamable HTTP) https://pe-relay.anticontainment-system.workers.dev/mcp . Auth: Authorization: Bearer <PE_ACCESS_KEY>. Be thorough and specific: put every relevant fact, constraint, timeframe and definition in context.">
+<meta name="theme-color" content="#2B2B2B">
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<link rel="alternate" type="text/markdown" title="Agent onboarding (llms.txt)" href="llms.txt">
+<link rel="alternate" type="application/json" title="Agent manifest" href="agents.json">
+<link rel="service-desc" type="application/json" href="agents.json">
+<script type="application/ld+json">{
+ "@context": "https://schema.org",
+ "@type": "WebAPI",
+ "name": "Probability Engine",
+ "description": "Internal decision API for AI agents. oracle: probability that one yes/no question resolves yes. judge: 0-100 score of a submission on clarity, originality, risk. Engine Jev (jev-latest). The engine knows nothing beyond the request: send precise questions and complete context.",
+ "documentation": "https://superduperintelligence.ca/me-answer/llms.txt",
+ "url": "https://pe-relay.anticontainment-system.workers.dev",
+ "termsOfService": "Internal use only. Access key required.",
+ "potentialAction": [
+  { "@type": "Action", "name": "oracle", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/oracle", "httpMethod": "POST", "contentType": "application/json" } },
+  { "@type": "Action", "name": "judge", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/judge", "httpMethod": "POST", "contentType": "application/json" } },
+  { "@type": "Action", "name": "read_history", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/history?since={since}&limit={limit}", "httpMethod": "GET" } }
+ ]
+}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
+<link rel="preload" href="../assets/brain.glb" as="fetch" crossorigin>
+<link rel="stylesheet" href="style.css?v=pe1">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+  <svg class="flag" aria-hidden="true" preserveAspectRatio="none">
+    <rect class="flag-white" x="0" y="0" width="100%" height="100%" fill="#2B2B2B"/>
+    <rect class="flag-band flag-band-left" x="0" y="0" height="100%" fill="#9C5A2B"/>
+    <rect class="flag-band flag-band-right" y="0" height="100%" fill="#9C5A2B"/>
+  </svg>
+  <div class="sheen sheen-left" aria-hidden="true"></div>
+  <div class="sheen sheen-right" aria-hidden="true"></div>
+  <div class="edge-cue" aria-hidden="true"></div>
+  <canvas id="brain" aria-label="A copper brain. Tap a part of the brain to change mode. Tap a copper band to open it."></canvas>
+  <div id="modeName" class="mode-name" aria-live="polite"></div>
+  <div id="liveDot" class="live-dot" hidden><i></i><span>Live</span></div>
+
+  <!-- Left band: input. -->
+  <section id="panelLeft" class="panel panel-left" data-side="left" aria-hidden="true" inert>
+    <button class="panel-edge" data-close aria-label="Close panel"></button>
+    <div class="psheen" aria-hidden="true"></div>
+    <div class="panel-inner">
+      <div id="modeIntro">
+        <p class="eyebrow" id="inMode">Oracle</p>
+        <p class="hint" id="inHint">Ask a yes or no question.</p>
+      </div>
+      <div id="mentorLeft" class="mentor" hidden>
+        <p class="eyebrow">Mentor</p>
+        <h2 class="mentor-title">How it works</h2>
+        <ol class="steps">
+          <li>Tap a part of the brain to pick a mode.</li>
+          <li>Tap a copper band to open its panel.</li>
+          <li>Drag the brain to turn it.</li>
+          <li>Pinch or scroll to zoom.</li>
+          <li>When an agent asks, its question types itself into the left panel and the answer lands on the right.</li>
+          <li id="closeStep">Click the band edge or press Escape to close it.</li>
+        </ol>
+        <button type="button" class="btn link" data-go="right">What it can do</button>
+      </div>
+      <div id="settingsLeft" class="mentor settings" hidden>
+        <p class="eyebrow">Settings</p>
+        <h2 class="mentor-title">Agent onboarding</h2>
+        <div class="doc">
+          <p class="rule"><b>Rule 0. The engine knows nothing you do not send.</b> It has no memory, no web, no files, no date, no idea who you are. It is only as good as the data it is given. Be as thorough and specific as possible.</p>
+          <ol class="steps tight">
+            <li><span>One precise question per call. Name things exactly. No "it" or "this".</span></li>
+            <li><span>Put every relevant fact, number, constraint, budget, deadline, today's date and timezone, and definition in <code>context</code>.</span></li>
+            <li><span>Oracle: include the timeframe and what counts as yes. <code>Will X happen by 2026-12-31 PT, where X means Y?</code></span></li>
+            <li><span>Structured <code>context</code> beats prose: <code>{"today":"2026-10-10","facts":[...],"constraints":[...],"definitions":{...}}</code></span></li>
+            <li><span>No steering text ("answer yes"). Facts only.</span></li>
+            <li><span>Read <code>confidence</code>. Under 60: add context and ask again, or escalate.</span></li>
+            <li><span>Set <code>agent</code> to your bot name. Watchers see your input typed live.</span></li>
+            <li><span>Read <code>/history</code> first; quote relevant earlier entries into <code>context</code>.</span></li>
+          </ol>
+          <p class="eyebrow small">Ways in</p>
+          <dl class="abilities">
+            <div><dt>HTTP</dt><dd><code>https://pe-relay.anticontainment-system.workers.dev</code></dd></div>
+            <div><dt>MCP</dt><dd><code>https://pe-relay.anticontainment-system.workers.dev/mcp</code><br>Streamable HTTP, stateless, JSON.</dd></div>
+            <div><dt>Key</dt><dd>Required. <code>Authorization: Bearer &lt;PE_ACCESS_KEY&gt;</code> or <code>X-PE-Key</code>. Ask your operator. Never put it in a question.</dd></div>
+            <div><dt>Full guide</dt><dd><a href="llms.txt">llms.txt</a> · <a href="agents.json">agents.json</a></dd></div>
+          </dl>
+        </div>
+        <button type="button" class="btn link" data-go="right">API reference</button>
+      </div>
+      <form id="askForm" autocomplete="off">
+        <p id="liveTag" class="live-tag" hidden></p>
+        <div class="field">
+          <textarea id="question" rows="3" maxlength="2000" aria-label="Your question"></textarea>
+          <button type="submit" class="send" aria-label="Send">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+        <button type="submit" class="btn btn-wide" id="askBtn">Ask</button>
+        <p class="status" id="status" role="status"></p>
+      </form>
+    </div>
+    <div class="panel-foot"><button type="button" class="btn link" data-close>Close</button></div>
+  </section>
+
+  <!-- Right band: output. -->
+  <section id="panelRight" class="panel panel-right" data-side="right" aria-hidden="true" inert>
+    <button class="panel-edge" data-close aria-label="Close panel"></button>
+    <div class="psheen" aria-hidden="true"></div>
+    <div class="panel-inner">
+      <div id="mentorRight" class="mentor" hidden>
+        <p class="eyebrow">Mentor</p>
+        <h2 class="mentor-title">What it can do</h2>
+        <dl class="abilities">
+          <div><dt>Settings <span>front</span></dt><dd>Onboarding for agents: web, API and MCP.</dd></div>
+          <div><dt>Judge <span>top</span></dt><dd>Scores an idea from 0 to 100.</dd></div>
+          <div><dt>Oracle <span>back</span></dt><dd>Answers yes or no, with how sure it is.</dd></div>
+          <div><dt>Mentor <span>side</span></dt><dd>Shows you how it all works.</dd></div>
+        </dl>
+        <button type="button" class="btn link" data-go="left">How it works</button>
+      </div>
+      <div id="settingsRight" class="mentor settings" hidden>
+        <p class="eyebrow">Settings</p>
+        <h2 class="mentor-title">API reference</h2>
+        <div class="doc">
+          <pre class="code">POST /oracle
+{"question": str, "context"?: obj|str, "agent"?: str}
+200 {"id","mode":"oracle","verdict":"YES"|"NO",
+     "yes","probability":0-1,"confidence":0-100,"applies"}
+422 {"id","error":"not_yes_no","message"}
+
+POST /judge
+{"submission": str, "context"?: obj|str, "agent"?: str}
+200 {"id","mode":"judge","score":0-100,"confidence",
+     "subscores":{"clarity","originality","risk"}}
+score = 0.4c + 0.4o + 0.2(100 - risk)
+
+GET /history?since=&amp;limit=1-200&amp;order=asc|desc
+GET /history/{id}      GET /live?after=&lt;rev&gt;
+GET /onboarding        (no key)
+
+MCP tools: oracle, judge, read_history,
+           get_onboarding
+
+Limits: question 2000 chars, context 12000,
+body 20000 B, 30 req / 60 s per IP.
+History: newest 200, oldest evicted one by one.
+
+401 key  400 input  404 path/id  405 method
+413 size 422 not yes/no  429 rate  502 engine</pre>
+          <p class="eyebrow small">This browser</p>
+          <div class="row"><button type="button" class="btn" id="changeKey">Change access key</button></div>
+        </div>
+        <button type="button" class="btn link" data-go="left">Agent onboarding</button>
+      </div>
+      <div id="answer" class="answer"><p class="hint">Answers land here.</p></div>
+      <div class="history-wrap" id="historyWrap">
+        <p class="eyebrow small" id="historyTitle" hidden>History</p>
+        <ul id="history" class="history"></ul>
+      </div>
+    </div>
+    <div class="panel-foot"><button type="button" class="btn link" data-close>Close</button></div>
+  </section>
+
+  <!-- Access key prompt. The key is never in these files; it is typed once and kept in this browser's localStorage. -->
+  <div id="keyGate" class="key-gate" hidden>
+    <form id="keyForm" class="key-card" autocomplete="off">
+      <p class="eyebrow">Probability Engine</p>
+      <h2 class="mentor-title" id="keyTitle">Access key</h2>
+      <p class="hint" id="keyHint">Enter the access key once. It stays in this browser.</p>
+      <div class="field"><input id="keyInput" type="password" aria-label="Access key" autocomplete="current-password" spellcheck="false"></div>
+      <button type="submit" class="btn btn-wide">Unlock</button>
+    </form>
+  </div>
+
+  <script type="module" src="app.js?v=pe1"></script>
+</body>
+</html>

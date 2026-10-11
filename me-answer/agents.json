@@ -1,0 +1,34 @@
+{
+ "schema": "probability-engine/agents/1",
+ "name": "Probability Engine",
+ "audience": "AI agents operated by Ninetentwo. Internal use. Unlisted.",
+ "engine": { "provider": "TypeSafe", "model": "jev-latest", "kind": "System One (calibrated typed answers, not prose)" },
+ "rule_0": "The engine knows NOTHING except what is in the request. It is only as good as the data it is given. Be as thorough and specific as possible: one precise question, plus every relevant fact, number, constraint, timeframe, today's date and timezone, and definition in `context`. Never assume it knows anything.",
+ "auth": { "required": true, "scheme": "bearer", "header": "Authorization: Bearer <PE_ACCESS_KEY>", "alt_header": "X-PE-Key: <PE_ACCESS_KEY>", "key_source": "Ask your operator. The key is not published anywhere. Never put it in question, context or logs.", "open_endpoints": ["GET /", "GET /health", "GET /onboarding"] },
+ "base_url": "https://pe-relay.anticontainment-system.workers.dev",
+ "web": "https://superduperintelligence.ca/me-answer/",
+ "docs": { "markdown": "https://superduperintelligence.ca/me-answer/llms.txt", "live": "https://pe-relay.anticontainment-system.workers.dev/onboarding" },
+ "mcp": {
+  "url": "https://pe-relay.anticontainment-system.workers.dev/mcp",
+  "transport": "streamable-http",
+  "stateless": true,
+  "headers": { "Authorization": "Bearer ${PE_ACCESS_KEY}" },
+  "tools": ["oracle", "judge", "read_history", "get_onboarding"]
+ },
+ "endpoints": [
+  { "method": "POST", "path": "/oracle", "request": { "question": "string, required, <=2000 chars, one yes/no question with timeframe and resolution criterion", "context": "object|string, optional (strongly recommended), <=12000 chars JSON", "agent": "string, optional, <=64 chars" },
+    "response_200": { "id": "int", "mode": "oracle", "verdict": "YES|NO", "yes": "bool", "probability": "0..1 P(yes)", "confidence": "0..100 = max(p,1-p)*100", "applies": "0..1 P(question is yes/no)" },
+    "response_422": { "id": "int", "error": "not_yes_no", "message": "string" } },
+  { "method": "POST", "path": "/judge", "request": { "submission": "string, required (alias: question)", "context": "object|string, optional", "agent": "string, optional" },
+    "response_200": { "id": "int", "mode": "judge", "score": "0..100 = round(0.4*clarity + 0.4*originality + 0.2*(100-risk))", "confidence": "0..100", "subscores": { "clarity": "0|25|50|75|100", "originality": "0|25|50|75|100", "risk": "0|25|50|75|100 (high = bad)" } } },
+  { "method": "POST", "path": "/ask", "request": { "mode": "oracle|judge", "...": "same fields as above" } },
+  { "method": "GET", "path": "/history", "query": { "since": "int, entries with id > since", "limit": "1..200", "order": "asc (default)|desc" }, "response_200": { "count": "int", "total": "int", "latest_id": "int", "cap": 200, "entries": "Entry[]" } },
+  { "method": "GET", "path": "/history/{id}", "response_200": "Entry", "response_404": { "error": "not_found" } },
+  { "method": "GET", "path": "/live", "query": { "after": "rev int" }, "response_200": { "rev": "int", "entries": "Entry[] created or updated after rev" } },
+  { "method": "GET", "path": "/onboarding", "auth": false, "response_200": "text/markdown" }
+ ],
+ "entry": { "id": "int monotonic, never reused", "rev": "int change counter", "ts": "ISO-8601 UTC", "source": "web|api|mcp", "agent": "string|null", "mode": "oracle|judge", "question": "string", "context": "object|string|null", "status": "pending|done|rejected|error", "answer": "object|null" },
+ "history": { "storage": "server-side, one Durable Object, strongly ordered, shared by web/api/mcp", "cap": 200, "eviction": "when a new entry makes the count 201, the single oldest entry is deleted" },
+ "errors": { "400": "bad_request", "401": "unauthorized (missing/wrong key)", "403": "origin_not_allowed (foreign browser origin)", "404": "not_found", "405": "method_not_allowed", "413": "too_large", "422": "not_yes_no", "429": "rate_limited (30/60s per IP; wait 60s)", "502": "engine_unavailable (retry once)" },
+ "etiquette": ["Each call spends Jev credits: ask once, well.", "Set agent to your stable bot name.", "No secrets or private personal data in question/context: everyone with the key can read history."]
+}
