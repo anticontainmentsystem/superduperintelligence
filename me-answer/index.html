@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="googlebot" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta name="description" content="Probability Engine: an internal tool for AI agents. Oracle returns a calibrated probability for one yes/no question; Judge scores a submission 0-100 on clarity, originality and risk. Engine: Jev (TypeSafe System One). Requires an access key. The engine knows nothing you do not send; give full context.">
-<meta name="ai-agent:instructions" content="Read /me-answer/llms.txt (or GET https://pe-relay.anticontainment-system.workers.dev/onboarding) before calling. HTTP API base https://pe-relay.anticontainment-system.workers.dev . MCP (Streamable HTTP) https://pe-relay.anticontainment-system.workers.dev/mcp . Auth: Authorization: Bearer <PE_ACCESS_KEY>. Be thorough and specific: put every relevant fact, constraint, timeframe and definition in context.">
+<meta name="description" content="Probability Engine: an internal tool for AI agents with three tools on Jev (TypeSafe System One). Oracle returns a calibrated probability for one yes/no question. Judge scores a submission 0-100 on clarity, originality and risk. Guide ranks 2 to 8 options for a situation by the probability each is best, or says none fit; Suggest drafts options. Settings holds the onboarding, API and MCP reference. Requires an access key. The engine knows nothing you do not send; give full context.">
+<meta name="ai-agent:instructions" content="Start here: read /me-answer/llms.txt (or GET https://pe-relay.anticontainment-system.workers.dev/onboarding, or MCP tools/call get_onboarding) before calling. It covers oracle, judge, guide and suggest with a worked example each. HTTP API base https://pe-relay.anticontainment-system.workers.dev . MCP (Streamable HTTP) https://pe-relay.anticontainment-system.workers.dev/mcp . Auth: Authorization: Bearer <PE_ACCESS_KEY>. Tools: oracle (POST /oracle), judge (POST /judge), guide (POST /guide, situation plus 2-8 options), suggest (POST /suggest, draft options, not saved). Be thorough and specific: put every relevant fact, constraint, timeframe and definition in context; for guide give the full situation with every constraint and real, distinct options.">
 <meta name="theme-color" content="#2B2B2B">
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -22,13 +22,15 @@
  "@context": "https://schema.org",
  "@type": "WebAPI",
  "name": "Probability Engine",
- "description": "Internal decision API for AI agents. oracle: probability that one yes/no question resolves yes. judge: 0-100 score of a submission on clarity, originality, risk. Engine Jev (jev-latest). The engine knows nothing beyond the request: send precise questions and complete context.",
+ "description": "Internal decision API for AI agents. oracle: probability that one yes/no question resolves yes. judge: 0-100 score of a submission on clarity, originality, risk. guide: ranks 2-8 options for a situation by probability of being best, or no_option_fits. suggest: drafts 3-5 options (not saved). Engine Jev (jev-latest). The engine knows nothing beyond the request: send precise questions and complete context.",
  "documentation": "https://superduperintelligence.ca/me-answer/llms.txt",
  "url": "https://pe-relay.anticontainment-system.workers.dev",
  "termsOfService": "Internal use only. Access key required.",
  "potentialAction": [
   { "@type": "Action", "name": "oracle", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/oracle", "httpMethod": "POST", "contentType": "application/json" } },
   { "@type": "Action", "name": "judge", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/judge", "httpMethod": "POST", "contentType": "application/json" } },
+  { "@type": "Action", "name": "guide", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/guide", "httpMethod": "POST", "contentType": "application/json" } },
+  { "@type": "Action", "name": "suggest", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/suggest", "httpMethod": "POST", "contentType": "application/json" } },
   { "@type": "Action", "name": "read_history", "target": { "@type": "EntryPoint", "urlTemplate": "https://pe-relay.anticontainment-system.workers.dev/history?since={since}&limit={limit}", "httpMethod": "GET" } }
  ]
 }</script>
@@ -37,7 +39,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
 <link rel="preload" href="../assets/brain.glb" as="fetch" crossorigin>
-<link rel="stylesheet" href="style.css?v=pe1">
+<link rel="stylesheet" href="style.css?v=pe2">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -54,7 +56,7 @@
   <div class="sheen sheen-left" aria-hidden="true"></div>
   <div class="sheen sheen-right" aria-hidden="true"></div>
   <div class="edge-cue" aria-hidden="true"></div>
-  <canvas id="brain" aria-label="A copper brain. Tap a part of the brain to change mode. Tap a copper band to open it."></canvas>
+  <canvas id="brain" aria-label="A copper brain. Tap a part of the brain to pick Guide, Judge, Oracle or Settings. Tap a copper band to open it."></canvas>
   <div id="modeName" class="mode-name" aria-live="polite"></div>
   <div id="liveDot" class="live-dot" hidden><i></i><span>Live</span></div>
 
@@ -67,51 +69,71 @@
         <p class="eyebrow" id="inMode">Oracle</p>
         <p class="hint" id="inHint">Ask a yes or no question.</p>
       </div>
-      <div id="mentorLeft" class="mentor" hidden>
-        <p class="eyebrow">Mentor</p>
-        <h2 class="mentor-title">How it works</h2>
-        <ol class="steps">
-          <li>Tap a part of the brain to pick a mode.</li>
-          <li>Tap a copper band to open its panel.</li>
-          <li>Drag the brain to turn it.</li>
-          <li>Pinch or scroll to zoom.</li>
-          <li>When an agent asks, its question types itself into the left panel and the answer lands on the right.</li>
-          <li id="closeStep">Click the band edge or press Escape to close it.</li>
-        </ol>
-        <button type="button" class="btn link" data-go="right">What it can do</button>
-      </div>
-      <div id="settingsLeft" class="mentor settings" hidden>
+      <!-- Settings (side lobe, the old instructions area). Each block is a self-contained
+           <section class="set-section" data-section="...">. To add a future settings section, add one more
+           section in either panel and one link in that panel's .set-index. No settings controls yet. -->
+      <div id="settingsLeft" class="explain settings" hidden>
         <p class="eyebrow">Settings</p>
-        <h2 class="mentor-title">Agent onboarding</h2>
-        <div class="doc">
-          <p class="rule"><b>Rule 0. The engine knows nothing you do not send.</b> It has no memory, no web, no files, no date, no idea who you are. It is only as good as the data it is given. Be as thorough and specific as possible.</p>
-          <ol class="steps tight">
-            <li><span>One precise question per call. Name things exactly. No "it" or "this".</span></li>
-            <li><span>Put every relevant fact, number, constraint, budget, deadline, today's date and timezone, and definition in <code>context</code>.</span></li>
-            <li><span>Oracle: include the timeframe and what counts as yes. <code>Will X happen by 2026-12-31 PT, where X means Y?</code></span></li>
-            <li><span>Structured <code>context</code> beats prose: <code>{"today":"2026-10-10","facts":[...],"constraints":[...],"definitions":{...}}</code></span></li>
-            <li><span>No steering text ("answer yes"). Facts only.</span></li>
-            <li><span>Read <code>confidence</code>. Under 60: add context and ask again, or escalate.</span></li>
-            <li><span>Set <code>agent</code> to your bot name. Watchers see your input typed live.</span></li>
-            <li><span>Read <code>/history</code> first; quote relevant earlier entries into <code>context</code>.</span></li>
+        <nav class="set-index" aria-label="Settings sections">
+          <a href="#set-how" data-jump>How it works</a><a href="#set-onboarding" data-jump>Onboarding</a><button type="button" class="link-ish" data-go="right">Tools, API, MCP</button>
+        </nav>
+        <section class="set-section" id="set-how" data-section="how-it-works">
+          <h2 class="explain-title">How it works</h2>
+          <ol class="steps">
+            <li>Tap a part of the brain to pick a tool: Guide (front), Judge (top) or Oracle (back). The side opens Settings.</li>
+            <li>Tap a copper band to open its panel.</li>
+            <li>Drag the brain to turn it.</li>
+            <li>Pinch or scroll to zoom.</li>
+            <li>When an agent asks, its input types itself into the left panel and the answer lands on the right.</li>
+            <li id="closeStep">Click the band edge or press Escape to close it.</li>
           </ol>
-          <p class="eyebrow small">Ways in</p>
-          <dl class="abilities">
-            <div><dt>HTTP</dt><dd><code>https://pe-relay.anticontainment-system.workers.dev</code></dd></div>
-            <div><dt>MCP</dt><dd><code>https://pe-relay.anticontainment-system.workers.dev/mcp</code><br>Streamable HTTP, stateless, JSON.</dd></div>
-            <div><dt>Key</dt><dd>Required. <code>Authorization: Bearer &lt;PE_ACCESS_KEY&gt;</code> or <code>X-PE-Key</code>. Ask your operator. Never put it in a question.</dd></div>
-            <div><dt>Full guide</dt><dd><a href="llms.txt">llms.txt</a> · <a href="agents.json">agents.json</a></dd></div>
-          </dl>
-        </div>
-        <button type="button" class="btn link" data-go="right">API reference</button>
+        </section>
+        <section class="set-section" id="set-onboarding" data-section="onboarding">
+          <h2 class="explain-title">Onboarding</h2>
+          <div class="doc">
+            <p class="rule"><b>Rule 0. The engine knows nothing you do not send.</b> It has no memory, no web, no files, no date, no idea who you are. It is only as good as the data it is given. Be as thorough and specific as possible.</p>
+            <ol class="steps tight">
+              <li><span>Read the full guide first: <a href="llms.txt">llms.txt</a>, <code>GET /onboarding</code> or MCP <code>get_onboarding</code>. It has a worked example for every tool.</span></li>
+              <li><span>One precise question per call. Name things exactly. No "it" or "this".</span></li>
+              <li><span>Put every relevant fact, number, constraint, budget, deadline, today's date and timezone, and definition in <code>context</code>.</span></li>
+              <li><span>Oracle: include the timeframe and what counts as yes. <code>Will X happen by 2026-12-31 PT, where X means Y?</code></span></li>
+              <li><span>Judge: send the whole submission, plus its goal, audience and constraints.</span></li>
+              <li><span>Guide: give the full situation with every constraint (who, goal, budget, time, place, what is ruled out) and 2 to 8 real, distinct options. On <code>no_option_fits</code>, change the options or call <code>suggest</code>.</span></li>
+              <li><span>Structured <code>context</code> beats prose: <code>{"today":"2026-10-10","facts":[...],"constraints":[...],"definitions":{...}}</code></span></li>
+              <li><span>No steering text ("answer yes"). Facts only.</span></li>
+              <li><span>Read <code>confidence</code>. Under 60: add context and ask again, or escalate.</span></li>
+              <li><span>Set <code>agent</code> to your bot name. Watchers see your input typed live.</span></li>
+              <li><span>Read <code>/history</code> first; quote relevant earlier entries into <code>context</code>. Newest 200 are kept.</span></li>
+            </ol>
+            <p class="eyebrow small">Ways in</p>
+            <dl class="abilities">
+              <div><dt>Web</dt><dd>This page. Tap a lobe, type, then Ask, Score or Decide.</dd></div>
+              <div><dt>HTTP</dt><dd><code>https://pe-relay.anticontainment-system.workers.dev</code> (see API)</dd></div>
+              <div><dt>MCP</dt><dd><code>https://pe-relay.anticontainment-system.workers.dev/mcp</code> (see MCP)</dd></div>
+              <div><dt>Key</dt><dd>Required. <code>Authorization: Bearer &lt;PE_ACCESS_KEY&gt;</code> or <code>X-PE-Key</code>. Ask your operator. Never put it in a question.</dd></div>
+              <div><dt>Full guide</dt><dd><a href="llms.txt">llms.txt</a> · <a href="agents.json">agents.json</a></dd></div>
+            </dl>
+          </div>
+        </section>
+        <!-- Future settings sections go here: <section class="set-section" id="set-..." data-section="..."> -->
+        <button type="button" class="btn link" data-go="right">Tools, API and MCP</button>
       </div>
       <form id="askForm" autocomplete="off">
         <p id="liveTag" class="live-tag" hidden></p>
         <div class="field">
-          <textarea id="question" rows="3" maxlength="2000" aria-label="Your question"></textarea>
+          <textarea id="question" rows="3" maxlength="2000" aria-label="Your question or situation"></textarea>
           <button type="submit" class="send" aria-label="Send">
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
           </button>
+        </div>
+        <div id="guideBox" class="guide" hidden>
+          <p class="eyebrow small">Options</p>
+          <ol id="optionList" class="options"></ol>
+          <div class="row">
+            <button type="button" class="btn" id="addOption">Add option</button>
+            <button type="button" class="btn" id="suggest">Suggest</button>
+          </div>
+          <button type="submit" class="btn btn-wide" id="decideBtn">Decide</button>
         </div>
         <button type="submit" class="btn btn-wide" id="askBtn">Ask</button>
         <p class="status" id="status" role="status"></p>
@@ -125,22 +147,24 @@
     <button class="panel-edge" data-close aria-label="Close panel"></button>
     <div class="psheen" aria-hidden="true"></div>
     <div class="panel-inner">
-      <div id="mentorRight" class="mentor" hidden>
-        <p class="eyebrow">Mentor</p>
-        <h2 class="mentor-title">What it can do</h2>
-        <dl class="abilities">
-          <div><dt>Settings <span>front</span></dt><dd>Onboarding for agents: web, API and MCP.</dd></div>
-          <div><dt>Judge <span>top</span></dt><dd>Scores an idea from 0 to 100.</dd></div>
-          <div><dt>Oracle <span>back</span></dt><dd>Answers yes or no, with how sure it is.</dd></div>
-          <div><dt>Mentor <span>side</span></dt><dd>Shows you how it all works.</dd></div>
-        </dl>
-        <button type="button" class="btn link" data-go="left">How it works</button>
-      </div>
-      <div id="settingsRight" class="mentor settings" hidden>
+      <div id="settingsRight" class="explain settings" hidden>
         <p class="eyebrow">Settings</p>
-        <h2 class="mentor-title">API reference</h2>
-        <div class="doc">
-          <pre class="code">POST /oracle
+        <nav class="set-index" aria-label="Settings sections">
+          <a href="#set-tools" data-jump>Tools</a><a href="#set-api" data-jump>API</a><a href="#set-mcp" data-jump>MCP</a><a href="#set-browser" data-jump>This browser</a><button type="button" class="link-ish" data-go="left">How it works, Onboarding</button>
+        </nav>
+        <section class="set-section" id="set-tools" data-section="tools">
+          <h2 class="explain-title">Tools</h2>
+          <dl class="abilities">
+            <div><dt>Guide <span>front</span></dt><dd>Picks the best option for a situation, or says none fit. Suggest drafts options.</dd></div>
+            <div><dt>Judge <span>top</span></dt><dd>Scores an idea from 0 to 100.</dd></div>
+            <div><dt>Oracle <span>back</span></dt><dd>Answers yes or no, with how sure it is.</dd></div>
+            <div><dt>Settings <span>side</span></dt><dd>How it works, onboarding, API, MCP, and future settings.</dd></div>
+          </dl>
+        </section>
+        <section class="set-section" id="set-api" data-section="api">
+          <h2 class="explain-title">API</h2>
+          <div class="doc">
+            <pre class="code">POST /oracle
 {"question": str, "context"?: obj|str, "agent"?: str}
 200 {"id","mode":"oracle","verdict":"YES"|"NO",
      "yes","probability":0-1,"confidence":0-100,"applies"}
@@ -152,23 +176,64 @@ POST /judge
      "subscores":{"clarity","originality","risk"}}
 score = 0.4c + 0.4o + 0.2(100 - risk)
 
+POST /guide
+{"situation": str, "options": [str x 2-8],
+ "context"?: obj|str, "agent"?: str}
+200 {"id","mode":"guide","choice","confidence",
+     "ranked":[{"option","probability":0-1}],
+     "none_probability"}
+422 {"id","error":"no_option_fits","message"}
+
+POST /suggest   (not saved to history)
+{"situation": str, "context"?: obj|str}
+200 {"options":[str x 3-5],"model"}
+
+POST /ask  {"mode":"oracle"|"judge"|"guide",...}
+
 GET /history?since=&amp;limit=1-200&amp;order=asc|desc
 GET /history/{id}      GET /live?after=&lt;rev&gt;
 GET /onboarding        (no key)
 
-MCP tools: oracle, judge, read_history,
-           get_onboarding
-
-Limits: question 2000 chars, context 12000,
-body 20000 B, 30 req / 60 s per IP.
+Limits: question/situation 2000 chars,
+option 120, context 12000,
+body 20000 B, 30 POSTs / 60 s per IP
+(GET /history and /live not counted).
 History: newest 200, oldest evicted one by one.
 
-401 key  400 input  404 path/id  405 method
-413 size 422 not yes/no  429 rate  502 engine</pre>
-          <p class="eyebrow small">This browser</p>
+401 key  400 input  403 origin  404 path/id
+405 method  413 size  422 not yes/no or
+no option fits  429 rate  502 engine/suggest</pre>
+          </div>
+        </section>
+        <section class="set-section" id="set-mcp" data-section="mcp">
+          <h2 class="explain-title">MCP</h2>
+          <div class="doc">
+            <pre class="code">URL  https://pe-relay.anticontainment-system.workers.dev/mcp
+Streamable HTTP, stateless JSON-RPC 2.0, POST
+Header  Authorization: Bearer &lt;PE_ACCESS_KEY&gt;
+
+Call get_onboarding first.
+  oracle    {question, context?, agent?}
+  judge     {submission, context?, agent?}
+  guide     {situation, options[2-8], context?, agent?}
+  suggest   {situation, context?}   (not saved)
+  read_history    {since?, limit?, order?}
+  get_onboarding  {}
+
+422 results come back with isError: true.</pre>
+            <p class="eyebrow small">Client config</p>
+            <pre class="code">{"mcpServers":{"probability-engine":{
+ "type":"http",
+ "url":"https://pe-relay.anticontainment-system.workers.dev/mcp",
+ "headers":{"Authorization":"Bearer ${PE_ACCESS_KEY}"}}}}</pre>
+          </div>
+        </section>
+        <section class="set-section" id="set-browser" data-section="this-browser">
+          <h2 class="explain-title">This browser</h2>
           <div class="row"><button type="button" class="btn" id="changeKey">Change access key</button></div>
-        </div>
-        <button type="button" class="btn link" data-go="left">Agent onboarding</button>
+        </section>
+        <!-- Future settings sections go here. -->
+        <button type="button" class="btn link" data-go="left">How it works and Onboarding</button>
       </div>
       <div id="answer" class="answer"><p class="hint">Answers land here.</p></div>
       <div class="history-wrap" id="historyWrap">
@@ -183,13 +248,13 @@ History: newest 200, oldest evicted one by one.
   <div id="keyGate" class="key-gate" hidden>
     <form id="keyForm" class="key-card" autocomplete="off">
       <p class="eyebrow">Probability Engine</p>
-      <h2 class="mentor-title" id="keyTitle">Access key</h2>
+      <h2 class="explain-title" id="keyTitle">Access key</h2>
       <p class="hint" id="keyHint">Enter the access key once. It stays in this browser.</p>
       <div class="field"><input id="keyInput" type="password" aria-label="Access key" autocomplete="current-password" spellcheck="false"></div>
       <button type="submit" class="btn btn-wide">Unlock</button>
     </form>
   </div>
 
-  <script type="module" src="app.js?v=pe1"></script>
+  <script type="module" src="app.js?v=pe2.1"></script>
 </body>
 </html>

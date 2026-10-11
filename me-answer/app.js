@@ -8,7 +8,7 @@ const RELAY = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? 'http://127.0.0.1:8787'
   : 'https://pe-relay.anticontainment-system.workers.dev';
 const COPPER = '#B87333';
-const KEY_STORE = 'pe.key', HIST_STORE = 'pe.history.cache', CLIENT_STORE = 'pe.client';
+const KEY_STORE = 'pe.key', HIST_STORE = 'pe.history.cache', CLIENT_STORE = 'pe.client', ONBOARD_STORE = 'pe.onboarded';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Phone layout also covers narrow desktop windows, where side panels would cover the brain.
 const mobileQuery = matchMedia('(max-width: 1023px), (pointer: coarse) and (orientation: portrait)');
@@ -25,12 +25,12 @@ const VERSION = {
 // Modes. A fourth mode is one more entry here, one more region, and one more card.
 // Regions: 1 frontal (front), 2 parietal (top), 3 temporal (lower side), 4 occipital (back).
 const MODES = {
-  settings: { name: 'Settings', region: 1, local: 'settings' },
+  guide: { name: 'Guide', region: 1, hint: 'Describe the full situation with every constraint, then list real, distinct options or let the brain suggest some.', placeholder: 'Describe your situation. Who, goal, budget, time, place, what is ruled out.' },
   judge: { name: 'Judge', region: 2, hint: 'Submit an idea, a line, or a plan. Give it the full picture: the engine knows only what you write.', placeholder: 'Your idea, with its goal and constraints' },
-  mentor: { name: 'Mentor', region: 3, local: 'mentor' },
+  settings: { name: 'Settings', region: 3, local: 'settings' },
   oracle: { name: 'Oracle', region: 4, hint: 'Ask a yes or no question. Include the timeframe and the facts that matter.', placeholder: 'Will it work by when, given what?' },
 };
-const REGION_MODE = { 1: 'settings', 2: 'judge', 3: 'mentor', 4: 'oracle' };
+const REGION_MODE = { 1: 'guide', 2: 'judge', 3: 'settings', 4: 'oracle' };
 let mode = 'oracle';
 
 const $ = (id) => document.getElementById(id);
@@ -306,7 +306,7 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 // A lobe tap picks the mode and opens the left panel with the glide and one sweep
-// (Mentor opens "How it works"). Re-tapping the same lobe after closing the panel leaves it closed;
+// (Settings opens "How it works"). Re-tapping the same lobe after closing the panel leaves it closed;
 // a different lobe opens it again. Nothing opens on page load.
 let lastLobe = null;
 function tapLobe(m) {
@@ -351,12 +351,12 @@ function sweepBands() {
   sheens.forEach((el) => { el.classList.remove('sweep'); void el.offsetWidth; el.classList.add('sweep'); });
 }
 let nameTimer = 0;
-const drafts = { judge: '', oracle: '' }; // each mode keeps its own text
+const drafts = { guide: '', judge: '', oracle: '' }; // each mode keeps its own text
 function selectMode(m, fromBrain, noBandSweep) {
   const qBox = $('question');
   // A live agent feed is not the person's draft: never save it as one, and clear it when they move on.
   if (m !== mode && drafts[mode] !== undefined && !qBox.classList.contains('terminal')) drafts[mode] = qBox.value;
-  if (qBox.classList.contains('terminal') && !livePlaying) { qBox.classList.remove('terminal'); qBox.readOnly = false; $('liveTag').hidden = true; if (liveDraft) { drafts[liveDraft.mode] = liveDraft.text; liveDraft = null; } }
+  if (qBox.classList.contains('terminal') && !livePlaying) endTerminal();
   mode = m;
   const M = MODES[m];
   uniforms.uActiveV.value.set(M.region === 1 ? 1 : 0, M.region === 2 ? 1 : 0, M.region === 3 ? 1 : 0, M.region === 4 ? 1 : 0);
@@ -370,11 +370,10 @@ function selectMode(m, fromBrain, noBandSweep) {
     el.classList.add('show');
     nameTimer = setTimeout(() => el.classList.remove('show'), 1700);
   }
-  // Mentor and Settings swap both panels to local text. No AI call.
+  // Settings swaps both panels to local text. No AI call.
   const local = M.local || '';
   $('closeStep').textContent = isTouch() ? 'Swipe a panel back toward its edge to close it.' : 'Click the band edge or press Escape to close it.';
   $('askForm').hidden = !!local; $('modeIntro').hidden = !!local;
-  $('mentorLeft').hidden = local !== 'mentor'; $('mentorRight').hidden = local !== 'mentor';
   $('settingsLeft').hidden = local !== 'settings'; $('settingsRight').hidden = local !== 'settings';
   $('answer').hidden = !!local; $('historyWrap').hidden = !!local;
   if (local) return;
@@ -382,9 +381,11 @@ function selectMode(m, fromBrain, noBandSweep) {
   $('inHint').textContent = M.hint;
   $('question').placeholder = M.placeholder;
   $('question').value = drafts[m] || ''; syncClear($('question'));
-  // Every mode has a visible submit: Oracle ASK, Judge SCORE.
-  $('askBtn').textContent = m === 'judge' ? 'Score' : 'Ask';
+  $('guideBox').hidden = m !== 'guide';
+  // Every mode has a visible submit: Oracle ASK, Judge SCORE, Guide DECIDE (inside the options box).
+  $('askBtn').hidden = m === 'guide'; $('askBtn').textContent = m === 'judge' ? 'Score' : 'Ask';
   $('status').textContent = '';
+  if (m === 'guide' && !$('optionList').children.length) { addOption(''); addOption(''); }
 }
 
 /* ---------- Panels ---------- */
@@ -486,7 +487,26 @@ function makeClear(field, onClear) {
 }
 function syncClear(field) { if (field._clear) field._clear.classList.toggle('on', field.value.length > 0); }
 document.addEventListener('input', (e) => { if (e.target._clear) syncClear(e.target); });
-// Mentor and Settings: each explainer panel links to the other with the same glide.
+function addOption(text, focus) {
+  const list = $('optionList');
+  if (list.children.length >= 8) return null;
+  const li = document.createElement('li');
+  const input = document.createElement('input'); input.maxLength = 120; input.value = text; input.placeholder = 'Option'; input.setAttribute('aria-label', 'Option');
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (e.metaKey || e.ctrlKey) $('askForm').requestSubmit(); else addOption('', true); } });
+  input.addEventListener('focus', () => { if (q.classList.contains('terminal') && !livePlaying) endTerminal(); });
+  const x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '\u00d7'; x.setAttribute('aria-label', 'Remove option');
+  x.addEventListener('click', () => { if (!livePlaying) li.remove(); });
+  li.append(input, x); list.append(li);
+  if (focus) input.focus();
+  return input;
+}
+$('addOption').addEventListener('click', () => { if (q.classList.contains('terminal') && !livePlaying) endTerminal(); addOption('', true); });
+const getOptions = () => [...$('optionList').querySelectorAll('input')].map((i) => i.value.trim()).filter(Boolean);
+const setOptions = (opts) => { $('optionList').innerHTML = ''; opts.forEach((o) => addOption(o)); };
+// Settings: section links scroll inside the panel (no page jump, no hash change).
+function jumpTo(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' }); }
+document.querySelectorAll('[data-jump]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); jumpTo(a.getAttribute('href').slice(1)); }));
+// Settings: each explainer panel links to the other with the same glide.
 document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
   const to = b.dataset.go;
   if (!isMobile() && panels[to].classList.contains('open')) { sweepPanel(to); return; }
@@ -507,10 +527,11 @@ function askKey(wrong) {
 $('keyForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const k = $('keyInput').value.trim(); if (!k) return;
-  store.set(KEY_STORE, k); $('keyGate').hidden = true;
+  store.set(KEY_STORE, k); $('keyInput').value = ''; $('keyGate').hidden = true;
   const w = keyWaiters; keyWaiters = []; w.forEach((f) => f());
 });
 $('changeKey').addEventListener('click', () => { store.del(KEY_STORE); askKey(false).then(() => { lastRev = 0; loadHistory(); }); });
+window.__peOnboarding = () => openOnboarding();
 async function relay(path, body) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const key = store.get(KEY_STORE);
@@ -542,15 +563,36 @@ function setThinking(on) {
   else if (facing) faceUntil = performance.now() + 1500;
 }
 
+// Suggest: Workers AI drafts options from the situation. Not saved to history.
+$('suggest').addEventListener('click', async () => {
+  if (livePlaying) return;
+  if (q.classList.contains('terminal')) endTerminal();
+  const situation = q.value.trim();
+  if (!situation) { $('status').textContent = 'Describe your situation first.'; q.focus(); return; }
+  const b = $('suggest'); b.disabled = true; $('status').textContent = 'Thinking of options.';
+  setThinking(true); setWorking(b, true);
+  try {
+    const { options } = await relay('/suggest', { situation, client: CLIENT });
+    setOptions(options);
+    $('status').textContent = 'Edit them, add your own, then decide.';
+  } catch (err) { $('status').textContent = err.message; }
+  b.disabled = false; setThinking(false); setWorking(b, false);
+});
+
 let busy = false;
 $('askForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (busy) return;
+  if (busy || livePlaying) return;
+  if (q.classList.contains('terminal')) { endTerminal(); return; }
   const question = q.value.trim();
   if (!question) { $('status').textContent = MODES[mode].hint; return; }
-  const body = mode === 'judge' ? { submission: question, client: CLIENT } : { question, client: CLIENT };
+  const body = mode === 'judge' ? { submission: question, client: CLIENT } : mode === 'guide' ? { situation: question, client: CLIENT } : { question, client: CLIENT };
+  if (mode === 'guide') {
+    body.options = getOptions();
+    if (body.options.length < 2) { $('status').textContent = 'Add at least two options, or tap Suggest.'; return; }
+  }
   busy = true; $('status').textContent = 'Thinking.'; setThinking(true);
-  const pressed = e.submitter && e.submitter.offsetParent ? e.submitter : $('askBtn');
+  const pressed = e.submitter && e.submitter.offsetParent ? e.submitter : (mode === 'guide' ? $('decideBtn') : $('askBtn'));
   setWorking(pressed, true);
   const started = performance.now();
   try {
@@ -582,7 +624,8 @@ $('askForm').addEventListener('submit', async (e) => {
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const bar = (pct) => `<div class="bar"><i data-w="${Math.max(0, Math.min(100, pct))}"></i></div>`;
 const NOTICE = {
-  oracle: { title: 'Ask a yes or no question.', note: 'That one needs a different kind of answer. Rephrase it as yes or no, with a timeframe.' },
+  oracle: { title: 'Ask a yes or no question.', note: 'That one needs a different kind of answer. Rephrase it as yes or no, with a timeframe, or use Guide to compare options.' },
+  guide: { title: 'None of these options fit.', note: 'Try different ones, or tap Suggest.' },
 };
 // Who asked: shown on every card so watchers can tell web from agents.
 const who = (d) => d.source && d.source !== 'web' ? `<span class="who">${esc(d.agent || 'agent')} · ${esc(d.source)}</span>` : (d.source === 'web' && d.agent ? `<span class="who">${esc(d.agent)}</span>` : '');
@@ -594,8 +637,11 @@ const CARDS = {
   judge: (d) => `<p class="eyebrow">Judge${who(d)}</p><p class="q">${esc(d.question)}</p>
     <p class="big">${d.score}<small>/ 100</small></p><p class="meta">Overall, ${d.confidence}% confident</p>${bar(d.score)}
     <div class="subs">${['clarity', 'originality', 'risk'].map((k) => `<div><div class="sub-top"><span>${k[0].toUpperCase() + k.slice(1)}</span><b>${d.subscores[k]}</b></div>${bar(d.subscores[k])}</div>`).join('')}</div>`,
+  guide: (d) => `<p class="eyebrow">Guide${who(d)}</p><p class="q">${esc(d.question)}</p>
+    <p class="big word">${esc(d.ranked[0].option)}</p><p class="meta">${Math.round(d.ranked[0].probability * 100)}% likely the best choice, ${d.confidence}% confident</p>
+    <div class="rank">${d.ranked.map((r) => `<div><div class="sub-top"><span>${esc(r.option)}</span><b>${Math.round(r.probability * 100)}%</b></div>${bar(r.probability * 100)}</div>`).join('')}</div>`,
 };
-const SHORT = { oracle: (d) => `${d.verdict === 'YES' ? 'Yes' : 'No'} ${d.confidence}%`, judge: (d) => `${d.score}/100`, notice: () => 'Not yes/no', error: () => 'No answer' };
+const SHORT = { oracle: (d) => `${d.verdict === 'YES' ? 'Yes' : 'No'} ${d.confidence}%`, judge: (d) => `${d.score}/100`, guide: (d) => esc(d.ranked[0].option), notice: () => 'No fit', error: () => 'No answer' };
 function showAnswer(d) {
   const el = $('answer');
   el.innerHTML = (CARDS[d.mode] || CARDS.notice)(d);
@@ -618,7 +664,7 @@ function cardOf(e) {
   if (e.status === 'rejected') return { ...base, mode: 'notice', of: e.mode, ...NOTICE[e.mode] || NOTICE.oracle };
   return { ...base, mode: 'notice', of: e.mode, title: 'No answer.', note: (e.answer && e.answer.message) || 'The engine did not answer.' };
 }
-const shortOf = (e) => e.status === 'done' ? SHORT[e.mode](e.answer) : e.status === 'rejected' ? SHORT.notice() : SHORT.error();
+const shortOf = (e) => e.status === 'done' && SHORT[e.mode] ? SHORT[e.mode](e.answer) : e.status === 'rejected' ? (e.mode === 'oracle' ? 'Not yes/no' : SHORT.notice()) : SHORT.error();
 function renderHistory() {
   const done = history.filter((e) => e.status !== 'pending');
   $('historyTitle').hidden = !done.length;
@@ -640,7 +686,8 @@ async function loadHistory() {
     history = h.entries; history.forEach((e) => seen.add(e.id));
     lastRev = h.rev || 0;
     renderHistory(); saveCache();
-  } catch (e) { renderHistory(); }
+    return true;
+  } catch (e) { renderHistory(); return false; }
 }
 function pollSoon() { clearTimeout(pollTimer); pollTimer = setTimeout(poll, 300); }
 async function poll() {
@@ -662,10 +709,33 @@ async function poll() {
   pollTimer = setTimeout(poll, document.hidden ? 6000 : 2000);
 }
 
-/* ---------- Live terminal: agent input types itself into the question box ---------- */
+/* ---------- Live terminal: agent input types itself into the fields ---------- */
+// Oracle and Judge: the question box. Guide: the situation box, then each option in turn.
 const liveQueue = []; let livePlaying = false, liveDraft = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const byId = (id) => history.find((h) => h.id === id);
+const optInputs = () => [...$('optionList').querySelectorAll('input')];
+function setTerminal(on) {
+  q.classList.toggle('terminal', on); q.readOnly = on;
+  $('optionList').classList.toggle('terminal', on); $('guideBox').classList.toggle('terminal', on);
+  optInputs().forEach((i) => { i.classList.toggle('terminal', on); i.readOnly = on; });
+}
+// Leave the terminal view and give the person their own draft (and Guide options) back.
+function endTerminal() {
+  setTerminal(false); $('liveTag').hidden = true;
+  if (liveDraft) {
+    drafts[liveDraft.mode] = liveDraft.text;
+    if (liveDraft.options) setOptions(liveDraft.options);
+  }
+  while (mode === 'guide' && $('optionList').children.length < 2) addOption('');
+  q.value = drafts[mode] || '';
+  liveDraft = null; syncClear(q);
+}
+async function typeInto(el, text, perStep) {
+  const step = reduceMotion ? Math.max(1, text.length) : Math.max(1, Math.ceil(text.length / perStep)); // long inputs type faster
+  for (let i = 0; i < text.length; i += step) { el.value = text.slice(0, i + step); el.scrollTop = el.scrollHeight; await sleep(reduceMotion ? 0 : 22); }
+  el.value = text;
+}
 async function playLive() {
   if (livePlaying || !liveQueue.length || busy) return;
   livePlaying = true;
@@ -673,18 +743,25 @@ async function playLive() {
     const e = byId(liveQueue.shift()); if (!e) continue;
     if (!MODES[e.mode] || MODES[e.mode].local) continue;
     $('liveDot').hidden = false;
-    // Keep whatever the person here was typing; it comes back when they tap the box.
-    if (liveDraft === null && mode !== 'settings' && mode !== 'mentor') liveDraft = { mode, text: q.value };
+    // Keep whatever the person here was typing; it comes back when they tap a field.
+    if (liveDraft === null && !MODES[mode].local) liveDraft = { mode, text: q.value, options: getOptions() };
     if (mode !== e.mode) selectMode(e.mode, true, true);
     if (!panels.left.classList.contains('open')) openPanel('left');
     const tag = $('liveTag'); tag.hidden = false; tag.textContent = `> ${e.agent || 'agent'} · ${e.source} · #${e.id}`;
-    q.classList.add('terminal'); q.readOnly = true; q.value = ''; syncClear(q);
+    if (e.mode === 'guide') $('optionList').innerHTML = '';
+    setTerminal(true); q.value = ''; syncClear(q);
     $('status').textContent = '';
     setThinking(true); setWorking(null, true);
     const text = e.question + (e.context != null ? '\n\n// context\n' + (typeof e.context === 'string' ? e.context : JSON.stringify(e.context, null, 1)) : '');
-    const step = reduceMotion ? text.length : Math.max(1, Math.ceil(text.length / 160)); // long inputs type faster
-    for (let i = 0; i < text.length; i += step) { q.value = text.slice(0, i + step); q.scrollTop = q.scrollHeight; await sleep(reduceMotion ? 0 : 22); }
-    q.value = text; q.scrollTop = 0; // back to the question itself
+    await typeInto(q, text, 160);
+    q.scrollTop = 0; // back to the question itself
+    if (e.mode === 'guide') {
+      for (const o of e.options || []) {
+        const inp = addOption(''); if (!inp) break;
+        inp.classList.add('terminal'); inp.readOnly = true;
+        await typeInto(inp, o, 40); await sleep(reduceMotion ? 0 : 120);
+      }
+    }
     // Wait for the answer (the poll keeps updating the entry).
     let cur = byId(e.id), waited = 0;
     while (cur && cur.status === 'pending' && waited < 45000) { await sleep(400); waited += 400; cur = byId(e.id); }
@@ -696,13 +773,10 @@ async function playLive() {
   $('liveDot').hidden = true;
   livePlaying = false;
 }
-// Tap the box after a live feed to get your own draft back.
-q.addEventListener('focus', () => {
-  if (!q.classList.contains('terminal') || livePlaying) return;
-  q.classList.remove('terminal'); $('liveTag').hidden = true;
-  if (liveDraft && liveDraft.mode === mode) q.value = liveDraft.text; else q.value = drafts[mode] || '';
-  liveDraft = null; syncClear(q);
-});
+// Tap the box after a live feed to get your own draft back (pointerdown too, in case the box already has focus).
+const backToDraft = () => { if (q.classList.contains('terminal') && !livePlaying) endTerminal(); };
+q.addEventListener('focus', backToDraft);
+q.addEventListener('pointerdown', backToDraft);
 // History scrolls on its own. Soft fades show only where there is more to see.
 function syncHistFade() {
   const h = $('history');
@@ -717,7 +791,20 @@ $('history').addEventListener('click', (e) => { const li = e.target.closest('li'
 let activeShown = false;
 selectMode('oracle', false);
 renderHistory();
-(async () => { if (!store.get(KEY_STORE)) await askKey(false); await loadHistory(); poll(); })();
+// First unlock in this browser: open Settings at Onboarding so a new agent (or person) reads it first.
+function openOnboarding() {
+  store.set(ONBOARD_STORE, '1');
+  lastLobe = 'settings';
+  selectMode('settings', true, true);
+  openPanel('left', true);
+  setTimeout(() => jumpTo('set-onboarding'), reduceMotion ? 0 : OPEN_MS + 100);
+}
+(async () => {
+  if (!store.get(KEY_STORE)) await askKey(false);
+  const ok = await loadHistory();
+  if (ok && !store.get(ONBOARD_STORE)) openOnboarding();
+  poll();
+})();
 // Test hook: window.__sdiSelect('judge') lights that lobe as if it were tapped.
 window.__sdiTap = (m) => tapLobe(m);
 window.__sdiShow = (d) => showAnswer(d);

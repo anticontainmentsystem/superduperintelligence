@@ -164,9 +164,9 @@ textarea::placeholder, .options input::placeholder { color: rgba(243,237,227,.55
 }
 #brain.over-lobe { cursor: pointer; }
 
-/* Mentor and Settings: the explainers, same off-white on copper. */
+/* Settings: the explainers, same off-white on copper. */
 [hidden] { display: none !important; }
-.mentor-title { margin: 0 0 26px; font-size: calc(var(--text) + 15px); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
+.explain-title { margin: 0 0 26px; font-size: calc(var(--text) + 15px); font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
 .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
 .steps li { counter-increment: step; display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid rgba(243,237,227,.35); font-size: var(--text); font-weight: 300; line-height: 1.4; }
 .steps li::before { content: counter(step); font-size: 12px; font-weight: 600; min-width: 14px; padding-top: .2em; opacity: .85; }
@@ -209,7 +209,7 @@ textarea::placeholder, .options input::placeholder { color: rgba(243,237,227,.55
 @keyframes work { 0%, 100% { background: rgba(243,237,227,.08); } 50% { background: rgba(243,237,227,.32); } }
 .send.working { color: var(--offwhite); }
 
-/* Mentor links: same as Add option, with a thin underline. */
+/* Settings links: same as Add option, with a thin underline. */
 .btn.link { margin-top: 22px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; }
 
 /* Thin white cue on the question side while the answer panel is open on mobile. */
@@ -258,7 +258,7 @@ body.cue-left .edge-cue { opacity: .75; transition-delay: var(--open); }
 
 /* History: its own scroll area filling the answer panel down to the Close button. */
 .panel-right .panel-inner { display: flex; flex-direction: column; }
-.panel-right .panel-inner > .answer, .panel-right .panel-inner > .mentor { flex: 0 0 auto; }
+.panel-right .panel-inner > .answer, .panel-right .panel-inner > .explain { flex: 0 0 auto; }
 .history-wrap { flex: 1 1 0; min-height: 140px; display: flex; flex-direction: column; }
 .history-wrap > .eyebrow { flex: 0 0 auto; }
 .history {
@@ -306,3 +306,16 @@ textarea.terminal { font: 400 13px/1.5 var(--mono); white-space: pre-wrap; backg
 .key-gate { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(43,43,43,.82); backdrop-filter: blur(3px); }
 .key-card { width: min(380px, 88vw); background: var(--copper); color: var(--offwhite); padding: 34px 32px 28px; border-radius: 2px; }
 .key-card input { flex: 1; width: 100%; background: transparent; border: 0; outline: none; color: var(--offwhite); caret-color: var(--offwhite); font: 400 18px/1.4 var(--mono); padding: 8px 0 10px; min-height: var(--touch); }
+
+/* ---------- v2 ---------- */
+/* Settings sections: each one is separate, so future settings slot in as one more section. */
+.set-index { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: -4px 0 22px; font-size: 12px; letter-spacing: .08em; }
+.set-index a, .set-index .link-ish { color: var(--offwhite); opacity: .85; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; background: none; border: 0; padding: 0; font: inherit; letter-spacing: inherit; cursor: pointer; }
+.set-index a:hover, .set-index .link-ish:hover { opacity: 1; }
+.set-section { padding-top: 22px; border-top: 1px solid rgba(243,237,227,.5); margin-top: 26px; scroll-margin-top: 12px; }
+.set-index + .set-section { margin-top: 0; }
+.set-section .explain-title { font-size: calc(var(--text) + 9px); margin-bottom: 16px; }
+/* Live Guide feed: the options type in terminal style too. */
+.options.terminal li { border-bottom-style: dashed; }
+.options input.terminal { font: 400 13px/1.5 var(--mono); caret-color: transparent; }
+.guide.terminal .row .btn, .guide.terminal #decideBtn { opacity: .5; pointer-events: none; }
